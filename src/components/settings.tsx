@@ -1,20 +1,18 @@
 // src/components/Settings.tsx
 
 import { useCallback, useEffect, useState } from "react";
-import { Save, Settings2, Undo2 } from "lucide-react";
+import { Monitor, Moon, Save, Settings2, Sun, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { ServerConfig } from "@/types/app";
 import { useAppContext } from "@/components/app-context";
-import { useTheme } from "@/components/theme-provider";
+import { Theme, useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Switch } from "@/components/ui/switch.tsx";
-
-interface SettingsProps {
-  className?: string;
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx";
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
   host: "127.0.0.1",
@@ -24,14 +22,8 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
 };
 
 export function Settings() {
-  const {
-    serverStatus,
-    startServer,
-    stopServer,
-    settings,
-    saveSettings,
-    isSettingsLoading,
-  } = useAppContext();
+  const { serverStatus, settings, saveSettings, isSettingsLoading } =
+    useAppContext();
 
   const { theme, setTheme } = useTheme();
 
@@ -109,46 +101,6 @@ export function Settings() {
     showTimestamps,
     autoRefresh,
     saveSettings,
-  ]);
-
-  const saveServerConfigOnly = useCallback(async () => {
-    setIsSaving(true);
-    try {
-      await saveSettings({ serverConfig });
-
-      if (serverStatus.is_running) {
-        toast("Server restart required", {
-          description: "Restart to apply new configuration?",
-          action: {
-            label: "Restart",
-            onClick: async () => {
-              try {
-                await stopServer();
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                await startServer(serverConfig);
-                toast.success("Server restarted");
-              } catch (err) {
-                toast.error("Failed to restart server");
-              }
-            },
-          },
-        });
-      } else {
-        toast.success("Server configuration saved");
-      }
-
-      setHasChanges(false);
-    } catch (err) {
-      toast.error("Failed to save configuration");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [
-    serverConfig,
-    serverStatus.is_running,
-    saveSettings,
-    stopServer,
-    startServer,
   ]);
 
   const resetToDefaults = useCallback(() => {
@@ -375,8 +327,114 @@ export function Settings() {
               disabled={!notificationsEnabled}
             />
           </div>
+
+          <div className="flex items-center">
+            <div className="flex flex-col gap-1.5">
+              <Label>Priority</Label>
+              <p className="text-sm text-muted-foreground">
+                Choose which emails trigger notifications
+              </p>
+            </div>
+            <div className="grow" />
+            <Select
+              value={notificationPriority}
+              onValueChange={(value: "all" | "important" | "none") => {
+                setNotificationPriority(value);
+                markChanged();
+              }}
+              disabled={!notificationsEnabled}
+            >
+              <SelectTrigger className="max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Emails</SelectItem>
+                <SelectItem value="important">Important Only</SelectItem>
+                <SelectItem value="none">None</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div className="bg-background/75 rounded-4xl p-6 h-fit">jj</div>
+        <div className="bg-background/75 rounded-4xl p-6 h-fit flex flex-col gap-6">
+          {/* title*/}
+          <div className="flex flex-col mb-6">
+            <Label className="text-xl">Appearance</Label>
+            <span className="text-sm text-muted-foreground">
+              Customize the look and feel
+            </span>
+          </div>
+
+          <div>
+            <Label className="mb-2">Theme</Label>
+            <ToggleGroup
+              type="single"
+              value={theme}
+              onValueChange={(value: Theme) => {
+                if (value) setTheme(value);
+              }}
+              className="grid grid-cols-3 gap-0 rounded-lg border border-input p-0 bg-background w-full h-10"
+              aria-label="Select theme"
+            >
+              <ToggleGroupItem
+                value="light"
+                aria-label="Light theme"
+                className="data-[state=on]:bg-muted px-2.5 py-1.5 h-full rounded-none rounded-l-lg hover:bg-muted/50"
+              >
+                <Sun className="h-4 w-4" />
+              </ToggleGroupItem>
+
+              <ToggleGroupItem
+                value="dark"
+                aria-label="Dark theme"
+                className="data-[state=on]:bg-muted px-2.5 py-1.5 h-full rounded-none hover:bg-muted/50"
+              >
+                <Moon className="h-4 w-4" />
+              </ToggleGroupItem>
+
+              <ToggleGroupItem
+                value="system"
+                aria-label="System theme"
+                className="data-[state=on]:bg-muted px-2.5 py-1.5 h-full rounded-none rounded-r-lg hover:bg-muted/50"
+              >
+                <Monitor className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          <div className="flex items-center">
+            <div className="flex flex-col gap-1.5">
+              <Label>Show Timestamps</Label>
+              <p className="text-sm text-muted-foreground">
+                Display relative timestamps
+              </p>
+            </div>
+            <div className="grow" />
+            <Switch
+              checked={showTimestamps}
+              onCheckedChange={(checked) => {
+                setShowTimestamps(checked);
+                markChanged();
+              }}
+            />
+          </div>
+
+          <div className="flex items-center">
+            <div className="flex flex-col gap-1.5">
+              <Label>Auto Refresh</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically refresh data
+              </p>
+            </div>
+            <div className="grow" />
+            <Switch
+              checked={autoRefresh}
+              onCheckedChange={(checked) => {
+                setAutoRefresh(checked);
+                markChanged();
+              }}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
