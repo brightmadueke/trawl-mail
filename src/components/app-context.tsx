@@ -1,20 +1,11 @@
 // src/components/app-context.tsx
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from "@tauri-apps/plugin-notification";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { Command } from "@tauri-apps/plugin-shell";
+import { type } from "@tauri-apps/plugin-os";
 import { toast } from "sonner";
 import { load, Store } from "@tauri-apps/plugin-store";
 import { Email, LogEntry, ServerConfig, ServerStatus } from "@/types/app";
@@ -326,13 +317,13 @@ export function AppProvider({ children }: AppProviderProps) {
         // You can add sound playback logic here
       }
 
+      const body = email.text
+        ? email.text.substring(0, 150) + (email.text.length > 150 ? "..." : "")
+        : "New email received";
+
       // Check desktop notifications
       if (!settings.desktopNotifications) {
         // Only show toast, skip system notification
-        const body = email.text
-          ? email.text.substring(0, 150) +
-            (email.text.length > 150 ? "..." : "")
-          : "New email received";
 
         toast(`${email.subject || "New Email"}`, {
           description: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
@@ -347,9 +338,6 @@ export function AppProvider({ children }: AppProviderProps) {
       }
 
       // 1. Show sonner toast with action button
-      const body = email.text
-        ? email.text.substring(0, 150) + (email.text.length > 150 ? "..." : "")
-        : "New email received";
 
       toast(`${email.subject || "New Email"}`, {
         description: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
@@ -369,10 +357,23 @@ export function AppProvider({ children }: AppProviderProps) {
       }
 
       if (hasPermission) {
-        sendNotification({
-          title: `${email.subject || "New Email"}`,
-          body: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
-        });
+        const currentOs = type();
+
+        console.log(currentOs);
+
+        if (currentOs === "linux") {
+          // Fallback directly to native notify-send on Linux
+          await Command.create("notify-send", [
+            `${email.subject || "New Email"}`,
+            `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
+          ]).execute();
+        } else {
+          // Standard Tauri logic for Windows/macOS
+          sendNotification({
+            title: `${email.subject || "New Email"}`,
+            body: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
+          });
+        }
       }
     },
     [

@@ -1,14 +1,6 @@
-// components/app-header.tsx
+// src/components/app-header.tsx
 
-import {
-  Maximize2,
-  Minus,
-  Play,
-  RefreshCw,
-  SquareStop,
-  Tractor,
-  X,
-} from "lucide-react";
+import { Maximize2, Minus, Play, RefreshCw, SquareStop, Tractor, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -24,13 +16,6 @@ export function AppHeader() {
   const [serverRestarting, setServerRestarting] = useState(false);
   const appWindow = getCurrentWindow();
 
-  const [config] = useState<ServerConfig>({
-    host: "0.0.0.0",
-    port: 2525,
-    max_message_size: 25_000_000,
-    require_auth: false,
-  });
-
   // Get state and actions from App Context
   const {
     serverStatus,
@@ -40,8 +25,16 @@ export function AppHeader() {
     startServer,
     stopServer,
     restartServer,
-    refreshAll,
+    settings,
   } = useAppContext();
+
+  // Use server config from settings, with fallback defaults
+  const config: ServerConfig = settings.serverConfig || {
+    host: "0.0.0.0",
+    port: 2525,
+    max_message_size: 25_000_000,
+    require_auth: false,
+  };
 
   // Start server handler
   const handleStartServer = useCallback(async () => {
@@ -49,13 +42,11 @@ export function AppHeader() {
       await startServer(config);
       toast.success("Server started!", {
         description: `Listening on ${config.host}:${config.port}`,
-        className: "bg-white",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error("Failed to start server!", {
         description: message,
-        className: "bg-white",
       });
     }
   }, [config, startServer]);
@@ -64,14 +55,11 @@ export function AppHeader() {
   const handleStopServer = useCallback(async () => {
     try {
       await stopServer();
-      toast.success("Server stopped!", {
-        className: "bg-white",
-      });
+      toast.success("Server stopped!");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error("Failed to stop server!", {
         description: message,
-        className: "bg-white",
       });
     }
   }, [stopServer]);
@@ -83,13 +71,11 @@ export function AppHeader() {
       await restartServer(config);
       toast.success("Server restarted!", {
         description: `Listening on ${config.host}:${config.port}`,
-        className: "bg-white",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error("Failed to restart server!", {
         description: message,
-        className: "bg-white",
       });
     } finally {
       setServerRestarting(false);
@@ -97,21 +83,11 @@ export function AppHeader() {
   }, [config, restartServer]);
 
   // Refresh handler
-  useCallback(async () => {
-    try {
-      await refreshAll();
-      toast.success("Refreshed!", {
-        className: "bg-white",
-      });
-    } catch (error) {
-      console.error("Refresh failed:", error);
-    }
-  }, [refreshAll]);
+
   // Determine if any server operation is in progress
   const isBusy = isServerLoading || isServerRestarting || serverRestarting;
 
   return (
-    // 1. Add drag region and prevent text selection on the header wrapper
     <header
       data-tauri-drag-region
       className="sticky h-12 flex p-2.5 items-center top-0 z-50 w-full border-b bg-transparent select-none cursor-default border-none"
@@ -123,7 +99,7 @@ export function AppHeader() {
         </span>
       </div>
 
-      {/* 2. Middle section with server status and controls */}
+      {/* Middle section with server status and controls */}
       <div
         data-tauri-drag-region
         className="grow flex justify-center items-center gap-4"
@@ -155,7 +131,7 @@ export function AppHeader() {
 
         {/* Error message if any */}
         {serverError && (
-          <span className="text-xs text-red-500 max-w-[200px] truncate">
+          <span className="text-xs text-red-500 max-w-50 truncate">
             {serverError}
           </span>
         )}
@@ -205,7 +181,7 @@ export function AppHeader() {
         </div>
       </div>
 
-      {/* 3. Window controls - keep free of drag region */}
+      {/* Window controls */}
       <div className="flex gap-2.5 items-center">
         {/* Minimize window */}
         <IconButton

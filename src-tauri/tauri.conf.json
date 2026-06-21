@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "trawl-mail",
+  "productName": "Trawl Mail",
   "version": "0.1.0",
-  "identifier": "com.bananastudio.trawl-mail",
+  "identifier": "com.syx.trawl-mail",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Trawl Mail",
+        "title": "Trawl Mail - Local SMTP Testing",
         "decorations": false,
         "resizable": true,
         "width": 1200,

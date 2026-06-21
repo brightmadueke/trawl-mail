@@ -32,6 +32,8 @@ env_logger = "0.10"
 parking_lot = "0.12"
 tauri-plugin-notification = "2"
 tauri-plugin-store = "2"
+tauri-plugin-os = "2"
+tauri-plugin-shell = "2"
 
 [features]
 default = ["custom-protocol"]

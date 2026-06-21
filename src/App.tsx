@@ -4,12 +4,14 @@ import { SidebarProvider } from "@/components/ui/sidebar.tsx";
 import { BrowserRouter as Router, Route, Routes } from "react-router";
 import { AppSidebar } from "@/components/app-sidebar.tsx";
 import { AppHeader, HEADER_HEIGHT } from "@/components/app-header.tsx";
-import { Inbox } from "@/components/inbox.tsx";
-import React, { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import Logs from "@/components/logs.tsx";
 import { AppProvider } from "@/components/app-context";
-import Settings from "@/components/settings.tsx";
+import { SplashScreen } from "@/components/splash-screen.tsx";
+
+const Inbox = lazy(() => import("@/components/inbox"));
+const Settings = lazy(() => import("@/components/settings"));
+const Logs = lazy(() => import("@/components/logs"));
 
 function App() {
   useEffect(() => {
@@ -38,11 +40,13 @@ function App() {
 
               <main className="bg-inherit border-none flex-1 overflow-hidden rounded-lg rounded-br-none">
                 <div className="h-full w-full">
-                  <Routes>
-                    <Route index element={<Inbox />} />
-                    <Route path="/logs" element={<Logs />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
+                  <Suspense fallback={<SplashScreen />}>
+                    <Routes>
+                      <Route index element={<Inbox />} />
+                      <Route path="/logs" element={<Logs />} />
+                      <Route path="/settings" element={<Settings />} />
+                    </Routes>
+                  </Suspense>
                 </div>
               </main>
             </div>

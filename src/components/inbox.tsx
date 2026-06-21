@@ -1,57 +1,28 @@
 // src/components/inbox.tsx
 
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group.tsx";
-import {
-  ArrowLeft,
-  Copy,
-  Download,
-  ListFilter,
-  RefreshCcwIcon,
-  RefreshCw,
-  Search,
-  Trash2,
-  User2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button.tsx";
+import {InputGroup, InputGroupAddon, InputGroupInput,} from "@/components/ui/input-group.tsx";
+import {ArrowLeft, Copy, Download, ListFilter, RefreshCcwIcon, RefreshCw, Search, Trash2, User2,} from "lucide-react";
+import {Button} from "@/components/ui/button.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.tsx";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge.tsx";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar.tsx";
-import { cn } from "@/lib/utils.ts";
-import { Email } from "@/types/app.ts";
-import { useAppContext } from "@/components/app-context";
+import {useCallback, useEffect, useMemo, useState} from "react";
+import {Badge} from "@/components/ui/badge.tsx";
+import {Avatar, AvatarFallback, AvatarImage,} from "@/components/ui/avatar.tsx";
+import {cn} from "@/lib/utils.ts";
+import {Email} from "@/types/app.ts";
+import {useAppContext} from "@/components/app-context";
 import IconButton from "@/components/icon-button.tsx";
-import { Spinner } from "@/components/ui/spinner.tsx";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty.tsx";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs.tsx";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { UnlistenFn } from "@tauri-apps/api/event";
-import { EmailTextViewer } from "@/components/text-view.tsx";
-import { HTMLPreview } from "@/components/html-preview.tsx"; // ==================== List Pane Item ====================
+import {Spinner} from "@/components/ui/spinner.tsx";
+import {Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle,} from "@/components/ui/empty.tsx";
+import {Tabs, TabsContent, TabsList, TabsTrigger,} from "@/components/ui/tabs.tsx";
+import {getCurrentWindow} from "@tauri-apps/api/window";
+import {UnlistenFn} from "@tauri-apps/api/event";
+import {EmailTextViewer} from "@/components/text-view.tsx";
+import {HTMLPreview} from "@/components/html-preview.tsx"; // ==================== List Pane Item ====================
 
 // ==================== List Pane Item ====================
 function ListPaneItem({
@@ -481,7 +452,7 @@ export function DisplayPane() {
 }
 
 // ==================== Inbox Main Component ====================
-export function Inbox() {
+export default function Inbox() {
   const { emails, isEmailsLoading, refreshEmails } = useAppContext();
 
   // @ts-ignore
