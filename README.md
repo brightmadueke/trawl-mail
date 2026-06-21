@@ -145,7 +145,7 @@ Make sure the AppImage is executable: `chmod +x trawl-mail.AppImage`
 ## Tech Stack
 
 - **Desktop Framework:** [Tauri](https://tauri.app/) (Rust backend)
-- **Frontend:** Svelte, Tailwind CSS
+- **Frontend:** React, Shadcn UI, Tailwind CSS
 - **SMTP Server:** Custom Rust-based SMTP server (using `tokio` and `async-smtp`)
 - **Email Parsing:** `mail-parser` (Rust)
 - **Storage:** SQLite (via `rusqlite`)
