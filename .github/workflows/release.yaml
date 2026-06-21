@@ -2,21 +2,24 @@ name: 'publish'
 on:
   push:
     branches:
-      - main # Or change to your active development branch
+      - main # Change this to your active development branch if it is different
+
+# Global permissions override to force GitHub to allow tag and release creation
+permissions:
+  contents: write
+  repository-projects: write
 
 jobs:
   publish-tauri:
     permissions:
-      contents: write # Crucial permission for creating Draft Releases
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # Universal macOS build configurations
-            args: '--target aarch64-apple-darwin'
           - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04' # Tauri v2 production target Linux engine
+            args: '--target universal-apple-darwin' # Compiles a single installer for Intel and Apple Silicon
+          - platform: 'ubuntu-22.04'
             args: ''
           - platform: 'windows-latest'
             args: ''
@@ -29,11 +32,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm' # Automates global npm package caching to save time
+          cache: 'npm'
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
+          # Targets required for cross-compiling the macOS universal binary
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: install Rust cache
@@ -47,17 +51,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: install macOS DMG packager
+        if: matrix.platform == 'macos-latest'
+        run: brew install create-dmg
+
       - name: install frontend dependencies
-        run: npm ci # 'npm ci' ensures clean, deterministic dependency resolution
+        run: npm ci
 
       - name: build frontend and tauri app
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Must remain under env block
         with:
-          tagName: app-v__VERSION__ # Replaces automatically with version from package.json
+          tagName: app-v__VERSION__ # Must remain under with block
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets below to download.'
-          releaseDraft: true
+          releaseDraft: true # Change to false if you want the release public immediately
           prerelease: false
           args: ${{ matrix.args }}
