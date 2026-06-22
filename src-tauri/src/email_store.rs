@@ -153,4 +153,15 @@ impl EmailStore {
             false
         }
     }
+
+    // Add to src-tauri/src/email_store.rs
+
+    pub fn mark_as_unread(&mut self, email_id: &str) -> bool {
+        if let Some(email) = self.emails.get_mut(email_id) {
+            email.is_read = false;
+            true
+        } else {
+            false
+        }
+    }
 }

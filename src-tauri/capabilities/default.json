@@ -23,6 +23,10 @@
     "store:allow-delete",
     "store:allow-clear",
     "os:default",
-    "shell:default"
+    "shell:default",
+    "fs:default",
+    "fs:allow-write-text-file",
+    "fs:allow-remove",
+    "shell:allow-open"
   ]
 }

@@ -14,6 +14,7 @@ import { Email, LogEntry, ServerConfig, ServerStatus } from "@/types/app";
 const EVENTS = {
   NEW_EMAIL: "new-email",
   EMAIL_READ: "email-read",
+  EMAIL_UNREAD: "email-unread",
   SERVER_STATUS: "server-status",
 } as const;
 
@@ -144,6 +145,7 @@ interface AppContextType {
   emailsError: string | null;
   selectEmail: (email: Email | null) => Promise<void>;
   markAsRead: (emailId: string) => Promise<void>;
+  markAsUnread: (emailId: string) => Promise<void>;
   refreshEmails: () => Promise<void>;
   unreadCount: number;
   logs: LogEntry[];
@@ -684,6 +686,43 @@ export function AppProvider({ children }: AppProviderProps) {
     [serverStatus.is_running],
   );
 
+  const markAsUnread = useCallback(
+    async (emailId: string) => {
+      try {
+        // In dev mode without a running server, just update state locally
+        if (isDevMode() && !serverStatus.is_running) {
+          setEmails((prev) =>
+            prev.map((e) => (e.id === emailId ? { ...e, is_read: false } : e)),
+          );
+          setUnreadCount((prev) => prev + 1);
+          return;
+        }
+
+        await invoke<boolean>("mark_email_as_unread", { emailId });
+        setEmails((prev) =>
+          prev.map((e) => (e.id === emailId ? { ...e, is_read: false } : e)),
+        );
+        setUnreadCount((prev) => prev + 1);
+
+        // Update server status
+        setServerStatus((prev) => ({
+          ...prev,
+          unread_emails: prev.unread_emails + 1,
+        }));
+      } catch (err) {
+        console.error("Failed to mark email as unread:", formatError(err));
+        // In dev mode, still update state locally
+        if (isDevMode()) {
+          setEmails((prev) =>
+            prev.map((e) => (e.id === emailId ? { ...e, is_read: false } : e)),
+          );
+          setUnreadCount((prev) => prev + 1);
+        }
+      }
+    },
+    [serverStatus.is_running],
+  );
+
   useEffect(() => {
     refreshEmailsRef.current = refreshEmails;
   }, [refreshEmails]);
@@ -918,6 +957,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
     const setupListeners = async () => {
       try {
+        // Listen for new emails
         const unlisten1 = await listen<Email>(EVENTS.NEW_EMAIL, (event) => {
           if (!isMounted) return;
           const newEmail = event.payload;
@@ -935,6 +975,7 @@ export function AppProvider({ children }: AppProviderProps) {
         });
         unlistenFunctions.push(unlisten1);
 
+        // Listen for email read events
         const unlisten2 = await listen<string>(EVENTS.EMAIL_READ, (event) => {
           if (!isMounted) return;
           const emailId = event.payload;
@@ -951,7 +992,25 @@ export function AppProvider({ children }: AppProviderProps) {
         });
         unlistenFunctions.push(unlisten2);
 
-        const unlisten3 = await listen<ServerStatus>(
+        // Listen for email unread events
+        const unlisten3 = await listen<string>(EVENTS.EMAIL_UNREAD, (event) => {
+          if (!isMounted) return;
+          const emailId = event.payload;
+          setEmails((prev) =>
+            prev.map((e) => (e.id === emailId ? { ...e, is_read: false } : e)),
+          );
+          setSelectedEmail((prev) =>
+            prev?.id === emailId ? { ...prev, is_read: false } : prev,
+          );
+          setServerStatus((prev) => ({
+            ...prev,
+            unread_emails: prev.unread_emails + 1,
+          }));
+        });
+        unlistenFunctions.push(unlisten3);
+
+        // Listen for server status changes
+        const unlisten4 = await listen<ServerStatus>(
           EVENTS.SERVER_STATUS,
           (event) => {
             if (!isMounted) return;
@@ -971,7 +1030,7 @@ export function AppProvider({ children }: AppProviderProps) {
             }
           },
         );
-        unlistenFunctions.push(unlisten3);
+        unlistenFunctions.push(unlisten4);
       } catch (err) {
         // Always log the error - don't suppress it
         console.error("Failed to set up event listeners:", formatError(err));
@@ -1015,6 +1074,7 @@ export function AppProvider({ children }: AppProviderProps) {
     emailsError,
     selectEmail,
     markAsRead,
+    markAsUnread,
     refreshEmails,
     unreadCount,
     logs,

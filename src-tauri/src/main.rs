@@ -32,6 +32,7 @@ fn main() {
 
     // Build and run the Tauri application
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -53,6 +54,7 @@ fn main() {
             commands::get_log_count,
             commands::delete_email,
             commands::clear_all_emails,
+            commands::mark_email_as_unread,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

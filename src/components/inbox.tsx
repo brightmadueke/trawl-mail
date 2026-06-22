@@ -1,4 +1,4 @@
-// src/components/inbox.tsx
+// src/components/inbox.tsx - With Tauri plugin for printing
 
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group.tsx";
 import {
@@ -8,7 +8,9 @@ import {
   File,
   ListFilter,
   Mail,
+  MailMinus,
   MailOpen,
+  Printer,
   RefreshCcwIcon,
   RefreshCw,
   Search,
@@ -24,7 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu.tsx";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar.tsx";
 import { cn } from "@/lib/utils.ts";
@@ -49,6 +51,133 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { join, tempDir } from "@tauri-apps/api/path";
+
+// ==================== Filter Configuration ====================
+type FilterType = "all" | "unread" | "read" | "has_attachments" | "has_html";
+
+interface FilterOption {
+  value: FilterType;
+  label: string;
+  icon?: React.ReactNode;
+  separatorBefore?: boolean;
+}
+
+const FILTER_OPTIONS: FilterOption[] = [
+  {
+    value: "all",
+    label: "All Emails",
+  },
+  {
+    value: "unread",
+    label: "Unread",
+    icon: <Mail className="size-4 mr-2" />,
+    separatorBefore: true,
+  },
+  {
+    value: "read",
+    label: "Read",
+    icon: <MailOpen className="size-4 mr-2" />,
+  },
+  {
+    value: "has_attachments",
+    label: "Has Attachments",
+    icon: <File className="size-4 mr-2" />,
+    separatorBefore: true,
+  },
+  {
+    value: "has_html",
+    label: "Has HTML",
+    icon: <File className="size-4 mr-2" />,
+  },
+];
+
+// ==================== Helper Functions ====================
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatHeadersText(email: Email): string {
+  return [
+    `From: ${email.sender_name} <${email.from}>`,
+    `To: ${email.to?.join(", ")}`,
+    email.cc?.length ? `CC: ${email.cc.join(", ")}` : null,
+    email.bcc?.length ? `BCC: ${email.bcc.join(", ")}` : null,
+    `Date: ${new Date(email.date).toUTCString()}`,
+    `Subject: ${email.subject}`,
+    `Message-ID: ${email.id}`,
+    `Has HTML: ${email.html ? "Yes" : "No"}`,
+    `Has Attachments: ${email.attachments?.length ? "Yes" : "No"}`,
+    `Is Read: ${email.is_read ? "Yes" : "No"}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function generateHeadersHtml(email: Email): string {
+  const rows = [
+    { header: "From", value: `${email.sender_name} &lt;${email.from}&gt;` },
+    { header: "To", value: email.to?.join(", ") },
+    email.cc?.length ? { header: "CC", value: email.cc.join(", ") } : null,
+    email.bcc?.length ? { header: "BCC", value: email.bcc.join(", ") } : null,
+    { header: "Date", value: new Date(email.date).toUTCString() },
+    { header: "Subject", value: email.subject },
+    { header: "Message-ID", value: email.id },
+    { header: "Has HTML", value: email.html ? "Yes" : "No" },
+    {
+      header: "Has Attachments",
+      value: email.attachments?.length ? "Yes" : "No",
+    },
+    { header: "Is Read", value: email.is_read ? "Yes" : "No" },
+  ].filter((row): row is { header: string; value: string } => row !== null);
+
+  const tableRows = rows
+    .map(
+      (row) =>
+        `<tr><td style="font-weight: 500; color: #666;">${row.header}</td><td>${row.value}</td></tr>`,
+    )
+    .join("");
+
+  return `<table>${tableRows}</table>`;
+}
+
+function generateAttachmentsHtml(email: Email): string {
+  if (!email.attachments?.length) return "<p>No attachments</p>";
+
+  const items = email.attachments
+    .map(
+      (a) =>
+        `<li>${a.filename} (${a.content_type || "Unknown type"}, ${formatFileSize(a.size)})</li>`,
+    )
+    .join("");
+
+  return `<ul>${items}</ul>`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+function getPlatformModifierKey(): string {
+  try {
+    if (/Mac|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      return "⌘";
+    }
+  } catch {
+    // Fallback to Ctrl
+  }
+  return "Ctrl";
+}
 
 // ==================== Context Menu Component ====================
 interface ContextMenuState {
@@ -105,14 +234,13 @@ function EmailContextMenu({
 
   if (!contextMenu.isOpen || !contextMenu.email) return null;
 
-  // Adjust position to prevent menu from going off screen
   const adjustedX = Math.min(contextMenu.x, window.innerWidth - 200);
   const adjustedY = Math.min(contextMenu.y, window.innerHeight - 300);
 
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[180px] rounded-md border bg-popover p-1 shadow-md animate-in fade-in-0 zoom-in-95"
+      className="fixed z-50 min-w-45 rounded-md border bg-popover p-1 shadow-md animate-in fade-in-0 zoom-in-95"
       style={{ left: adjustedX, top: adjustedY }}
     >
       <div className="flex flex-col">
@@ -129,20 +257,29 @@ function EmailContextMenu({
 
         <DropdownMenuSeparator className="my-1" />
 
-        <button
-          className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer w-full text-left"
-          onClick={() => {
-            if (contextMenu.email!.is_read) {
+        {contextMenu.email!.is_read ? (
+          <button
+            className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer w-full text-left"
+            onClick={() => {
               onMarkAsUnread(contextMenu.email!);
-            } else {
+              onClose();
+            }}
+          >
+            <MailMinus className="size-4" />
+            Mark as Unread
+          </button>
+        ) : (
+          <button
+            className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer w-full text-left"
+            onClick={() => {
               onMarkAsRead(contextMenu.email!);
-            }
-            onClose();
-          }}
-        >
-          <MailOpen className="size-4" />
-          {contextMenu.email!.is_read ? "Mark as Unread" : "Mark as Read"}
-        </button>
+              onClose();
+            }}
+          >
+            <MailOpen className="size-4" />
+            Mark as Read
+          </button>
+        )}
 
         <button
           className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer w-full text-left"
@@ -201,24 +338,25 @@ function ListPaneItem({
   selectionMode: boolean;
   onContextMenu: (e: React.MouseEvent, email: Email) => void;
 }) {
+  const handleClick = useCallback(() => {
+    if (selectionMode) {
+      onToggleSelect(email.id);
+    } else {
+      void selectEmail(email);
+    }
+  }, [selectionMode, email, selectEmail, onToggleSelect]);
+
   return (
     <div
       className={cn(
         "flex gap-3.5 h-20 px-4 items-center hover:bg-muted/20 dark:hover:bg-muted/20 not-hover:not-last:border-b cursor-pointer group",
         selectedEmail?.id === email.id &&
           "bg-muted dark:bg-muted/50 border-none",
-        isSelected && "bg-muted dark:bg-muted/50",
+        isSelected && "bg-muted dark:bg-muted/45",
       )}
-      onClick={async () => {
-        if (selectionMode) {
-          onToggleSelect(email.id);
-        } else {
-          await selectEmail(email);
-        }
-      }}
+      onClick={handleClick}
       onContextMenu={(e) => onContextMenu(e, email)}
     >
-      {/* Checkbox for selection mode */}
       {selectionMode && (
         <Checkbox
           checked={isSelected}
@@ -266,6 +404,7 @@ function BulkActionsHeader({
   onSelectAll,
   onDeselectAll,
   onMarkAsRead,
+  onMarkAsUnread,
   onDelete,
   onClose,
 }: {
@@ -274,6 +413,7 @@ function BulkActionsHeader({
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onMarkAsRead: () => void;
+  onMarkAsUnread: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -320,6 +460,14 @@ function BulkActionsHeader({
           disabled={selectedCount === 0}
         />
         <IconButton
+          icon={<MailMinus className="size-4" />}
+          variant="ghost"
+          size="sm"
+          onClick={onMarkAsUnread}
+          tooltip="Mark selected as unread"
+          disabled={selectedCount === 0}
+        />
+        <IconButton
           icon={<Trash2 className="size-4" />}
           variant="ghost"
           size="sm"
@@ -335,7 +483,6 @@ function BulkActionsHeader({
 
 // ==================== List Pane ====================
 function ListPane() {
-  // Get state from context
   const {
     emails,
     selectedEmail,
@@ -343,10 +490,11 @@ function ListPane() {
     selectEmail,
     refreshEmails,
     markAsRead,
+    markAsUnread,
     deleteEmail,
   } = useAppContext();
 
-  const [filter, setFilter] = useState<"all" | "new" | "unread">("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -356,7 +504,6 @@ function ListPane() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [emailToDelete, setEmailToDelete] = useState<Email | null>(null);
 
-  // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     isOpen: false,
     x: 0,
@@ -364,23 +511,28 @@ function ListPane() {
     email: null,
   });
 
-  // Filter and search emails
   const filteredEmails = useMemo(() => {
     let result = emails;
 
-    // Apply filter
     switch (filter) {
-      case "new":
-        result = result.filter((email) => !email.is_read);
-        break;
       case "unread":
         result = result.filter((email) => !email.is_read);
         break;
-      default:
+      case "read":
+        result = result.filter((email) => email.is_read);
+        break;
+      case "has_attachments":
+        result = result.filter(
+          (email) => email.attachments && email.attachments.length > 0,
+        );
+        break;
+      case "has_html":
+        result = result.filter(
+          (email) => email.html && email.html.trim().length > 0,
+        );
         break;
     }
 
-    // Apply search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -388,14 +540,23 @@ function ListPane() {
           email.sender_name?.toLowerCase().includes(query) ||
           email.from?.toLowerCase().includes(query) ||
           email.subject?.toLowerCase().includes(query) ||
-          email.text?.toLowerCase().includes(query),
+          email.text?.toLowerCase().includes(query) ||
+          email.html?.toLowerCase().includes(query),
       );
     }
 
     return result;
   }, [emails, filter, searchQuery]);
 
-  // Handle right-click context menu
+  useEffect(() => {
+    if (
+      selectedEmail &&
+      !filteredEmails.some((e) => e.id === selectedEmail.id)
+    ) {
+      void selectEmail(null);
+    }
+  }, [filteredEmails, selectedEmail, selectEmail]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent, email: Email) => {
     e.preventDefault();
     e.stopPropagation();
@@ -408,7 +569,6 @@ function ListPane() {
     });
   }, []);
 
-  // Close context menu
   const closeContextMenu = useCallback(() => {
     setContextMenu({
       isOpen: false,
@@ -418,7 +578,6 @@ function ListPane() {
     });
   }, []);
 
-  // Context menu actions
   const handleContextMenuDelete = useCallback((email: Email) => {
     setEmailToDelete(email);
     setShowDeleteDialog(true);
@@ -434,11 +593,15 @@ function ListPane() {
     [markAsRead],
   );
 
-  const handleContextMenuMarkAsUnread = useCallback(async (email: Email) => {
-    // Note: You'll need to implement this in your context if not already available
-    // For now, we'll just show a toast
-    toast.info("Mark as unread functionality coming soon");
-  }, []);
+  const handleContextMenuMarkAsUnread = useCallback(
+    async (email: Email) => {
+      if (email.is_read) {
+        await markAsUnread(email.id);
+        toast.success("Email marked as unread");
+      }
+    },
+    [markAsUnread],
+  );
 
   const handleContextMenuCopyContent = useCallback(async (email: Email) => {
     const content = email.text || email.html || email.raw_content || "";
@@ -460,26 +623,21 @@ function ListPane() {
 
   const handleContextMenuSelect = useCallback(
     (email: Email) => {
-      selectEmail(email);
+      void selectEmail(email);
     },
     [selectEmail],
   );
 
-  // Handle Ctrl/Cmd+A to select all
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check if Ctrl (Windows/Linux) or Cmd (Mac) is pressed with 'A'
       if ((e.ctrlKey || e.metaKey) && e.key === "a") {
-        // Only trigger if we're in the inbox area
         e.preventDefault();
 
-        // Enter selection mode and select all filtered emails
         setSelectionMode(true);
         const allIds = new Set(filteredEmails.map((email) => email.id));
         setSelectedEmailIds(allIds);
       }
 
-      // Escape to exit selection mode
       if (e.key === "Escape" && selectionMode) {
         setSelectionMode(false);
         setSelectedEmailIds(new Set());
@@ -490,13 +648,11 @@ function ListPane() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [filteredEmails, selectionMode]);
 
-  // Toggle individual email selection
   const toggleEmailSelection = useCallback((emailId: string) => {
     setSelectedEmailIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(emailId)) {
         newSet.delete(emailId);
-        // Exit selection mode if no emails are selected
         if (newSet.size === 0) {
           setSelectionMode(false);
         }
@@ -507,20 +663,17 @@ function ListPane() {
     });
   }, []);
 
-  // Select all filtered emails
   const selectAllFiltered = useCallback(() => {
     const allIds = new Set(filteredEmails.map((email) => email.id));
     setSelectedEmailIds(allIds);
     setSelectionMode(true);
   }, [filteredEmails]);
 
-  // Deselect all
   const deselectAll = useCallback(() => {
     setSelectedEmailIds(new Set());
     setSelectionMode(false);
   }, []);
 
-  // Mark selected as read
   const markSelectedAsRead = useCallback(async () => {
     const promises = Array.from(selectedEmailIds).map((id) => markAsRead(id));
     await Promise.allSettled(promises);
@@ -529,19 +682,24 @@ function ListPane() {
     toast.success(`Marked ${selectedEmailIds.size} email(s) as read`);
   }, [selectedEmailIds, markAsRead]);
 
-  // Delete selected
-  const deleteSelected = useCallback(async () => {
+  const markSelectedAsUnread = useCallback(async () => {
+    const promises = Array.from(selectedEmailIds).map((id) => markAsUnread(id));
+    await Promise.allSettled(promises);
+    setSelectedEmailIds(new Set());
+    setSelectionMode(false);
+    toast.success(`Marked ${selectedEmailIds.size} email(s) as unread`);
+  }, [selectedEmailIds, markAsUnread]);
+
+  const deleteSelected = useCallback(() => {
     setEmailToDelete(null);
     setShowDeleteDialog(true);
   }, []);
 
   const confirmDelete = useCallback(async () => {
     if (emailToDelete) {
-      // Delete single email
       await deleteEmail(emailToDelete.id);
       toast.success("Email deleted");
     } else {
-      // Delete selected emails
       const promises = Array.from(selectedEmailIds).map((id) =>
         deleteEmail(id),
       );
@@ -554,7 +712,6 @@ function ListPane() {
     setEmailToDelete(null);
   }, [selectedEmailIds, deleteEmail, emailToDelete]);
 
-  // Handle refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -564,9 +721,14 @@ function ListPane() {
     }
   }, [refreshEmails]);
 
+  const getFilterDisplayName = useCallback((filterValue: string): string => {
+    const option = FILTER_OPTIONS.find((opt) => opt.value === filterValue);
+    return option ? option.label : filterValue;
+  }, []);
+
   return (
     <div className="w-1/4 flex flex-col rounded-xl bg-background/85 h-full overflow-y-hidden border-l">
-      <div className="flex flex-col gap-3 p-6">
+      <div className="flex flex-col gap-3 p-4">
         <div className="flex gap-2">
           <InputGroup>
             <InputGroupInput
@@ -585,29 +747,22 @@ function ListPane() {
                 <IconButton icon={<ListFilter />} tooltip="Filter emails" />
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setFilter("all")}>
-                {filter === "all" && (
-                  <Badge className="bg-green-500 p-0 size-2 mr-2" />
-                )}
-                All
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilter("new")}>
-                {filter === "new" && (
-                  <Badge className="bg-green-500 p-0 size-2 mr-2" />
-                )}
-                New
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilter("unread")}>
-                {filter === "unread" && (
-                  <Badge className="bg-green-500 p-0 size-2 mr-2" />
-                )}
-                Unread
-              </DropdownMenuItem>
+            <DropdownMenuContent className="w-40">
+              {FILTER_OPTIONS.map((option) => (
+                <React.Fragment key={option.value}>
+                  {option.separatorBefore && <DropdownMenuSeparator />}
+                  <DropdownMenuItem
+                    onClick={() => setFilter(option.value)}
+                    className={cn(filter === option.value && "bg-muted")}
+                  >
+                    {option.icon}
+                    {option.label}
+                  </DropdownMenuItem>
+                </React.Fragment>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Refresh email list */}
           <IconButton
             icon={isRefreshing ? <Spinner /> : <RefreshCw />}
             tooltip="Refresh emails list"
@@ -616,26 +771,25 @@ function ListPane() {
           />
         </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-sm">
+        <div className="flex justify-between items-center flex-wrap gap-1">
+          <span className="text-sm flex items-center gap-1 flex-wrap">
             <i className="text-blue-500">Filter:</i>{" "}
-            <span className="font-medium capitalize">{filter}</span>
+            <span className="font-medium capitalize">
+              {getFilterDisplayName(filter)}
+            </span>
             {filteredEmails.length !== emails.length && (
-              <span className="text-muted-foreground ml-1">
+              <span className="text-muted-foreground">
                 ({filteredEmails.length} of {emails.length})
               </span>
             )}
           </span>
 
-          {/* Keyboard shortcut hint */}
-          <span className="text-xs text-muted-foreground">
-            {navigator.platform.includes("Mac") ? "⌘+A" : "Ctrl+A"} to select
-            all
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {getPlatformModifierKey()}+A to select all
           </span>
         </div>
       </div>
 
-      {/* Bulk Actions Header */}
       {selectionMode && (
         <BulkActionsHeader
           selectedCount={selectedEmailIds.size}
@@ -643,6 +797,7 @@ function ListPane() {
           onSelectAll={selectAllFiltered}
           onDeselectAll={deselectAll}
           onMarkAsRead={markSelectedAsRead}
+          onMarkAsUnread={markSelectedAsUnread}
           onDelete={deleteSelected}
           onClose={deselectAll}
         />
@@ -663,9 +818,9 @@ function ListPane() {
             )}
           </div>
         ) : (
-          filteredEmails.map((email, index) => (
+          filteredEmails.map((email) => (
             <ListPaneItem
-              key={email.id || index}
+              key={email.id}
               email={email}
               selectEmail={selectEmail}
               selectedEmail={selectedEmail}
@@ -678,7 +833,6 @@ function ListPane() {
         )}
       </div>
 
-      {/* Context Menu */}
       <EmailContextMenu
         contextMenu={contextMenu}
         onClose={closeContextMenu}
@@ -690,7 +844,6 @@ function ListPane() {
         onSelectEmail={handleContextMenuSelect}
       />
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -725,8 +878,10 @@ function ListPane() {
 
 // ==================== Display Pane ====================
 function DisplayPane() {
-  const { selectedEmail, selectEmail, deleteEmail } = useAppContext();
+  const { selectedEmail, selectEmail, deleteEmail, markAsRead, markAsUnread } =
+    useAppContext();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState("text");
 
   const handleDelete = useCallback(async () => {
     if (selectedEmail) {
@@ -736,34 +891,222 @@ function DisplayPane() {
   }, [selectedEmail, deleteEmail]);
 
   const handleCopy = useCallback(async () => {
-    if (selectedEmail) {
-      const content =
-        selectedEmail.text ||
-        selectedEmail.html ||
-        selectedEmail.raw_content ||
-        "";
-      await navigator.clipboard.writeText(content);
-      toast.success("Email content copied to clipboard");
+    if (!selectedEmail) return;
+
+    let content: string;
+    switch (activeTab) {
+      case "text":
+        content = selectedEmail.text || "";
+        break;
+      case "html":
+        content = selectedEmail.html || "";
+        break;
+      case "raw-content":
+        content = selectedEmail.raw_content || "";
+        break;
+      case "headers":
+        content = formatHeadersText(selectedEmail);
+        break;
+      case "attachments":
+        content =
+          selectedEmail.attachments?.map((a) => a.filename).join(", ") ||
+          "No attachments";
+        break;
+      default:
+        content = selectedEmail.text || "";
     }
-  }, [selectedEmail]);
+
+    if (content.trim()) {
+      await navigator.clipboard.writeText(content);
+      toast.success(
+        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} content copied to clipboard`,
+      );
+    } else {
+      toast.error("No content to copy");
+    }
+  }, [selectedEmail, activeTab]);
 
   const handleDownload = useCallback(() => {
-    if (selectedEmail) {
-      const content =
-        selectedEmail.text ||
-        selectedEmail.html ||
-        selectedEmail.raw_content ||
-        "";
-      const blob = new Blob([content], { type: "text/plain" });
+    if (!selectedEmail) return;
+
+    let content: string;
+    let filename: string;
+    let mimeType = "text/plain";
+
+    switch (activeTab) {
+      case "text":
+        content = selectedEmail.text || "";
+        filename = `${selectedEmail.subject || "email"}-text.txt`;
+        break;
+      case "html":
+        content = selectedEmail.html || "";
+        filename = `${selectedEmail.subject || "email"}.html`;
+        mimeType = "text/html";
+        break;
+      case "raw-content":
+        content = selectedEmail.raw_content || "";
+        filename = `${selectedEmail.subject || "email"}-raw.txt`;
+        break;
+      case "headers":
+        content = formatHeadersText(selectedEmail);
+        filename = `${selectedEmail.subject || "email"}-headers.txt`;
+        break;
+      case "attachments":
+        content =
+          selectedEmail.attachments
+            ?.map(
+              (a) =>
+                `${a.filename} (${a.content_type || "Unknown type"}, ${formatFileSize(a.size)})`,
+            )
+            .join("\n") || "No attachments";
+        filename = `${selectedEmail.subject || "email"}-attachments.txt`;
+        break;
+      default:
+        content = selectedEmail.text || "";
+        filename = `${selectedEmail.subject || "email"}.txt`;
+    }
+
+    if (content.trim()) {
+      const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${selectedEmail.subject || "email"}.txt`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Email downloaded");
+      toast.success(
+        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} content downloaded`,
+      );
+    } else {
+      toast.error("No content to download");
     }
-  }, [selectedEmail]);
+  }, [selectedEmail, activeTab]);
+
+  // Print using Tauri plugin
+  const handlePrint = useCallback(async () => {
+    if (!selectedEmail) return;
+
+    let content: string;
+    const title = selectedEmail.subject || "Email";
+
+    switch (activeTab) {
+      case "text":
+        content = `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(selectedEmail.text || "")}</pre>`;
+        break;
+      case "html":
+        content = selectedEmail.html || "";
+        break;
+      case "raw-content":
+        content = `<pre style="white-space: pre-wrap; font-family: monospace;">${escapeHtml(selectedEmail.raw_content || "")}</pre>`;
+        break;
+      case "headers":
+        content = generateHeadersHtml(selectedEmail);
+        break;
+      case "attachments":
+        content = generateAttachmentsHtml(selectedEmail);
+        break;
+      default:
+        content = `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(selectedEmail.text || "")}</pre>`;
+    }
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>${title}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+      th { background-color: #f2f2f2; }
+      @media print {
+        body { padding: 0; }
+      }
+    </style>
+  </head>
+  <body>${content}</body>
+</html>`;
+
+    try {
+      // Write the HTML content to a temporary file
+      const tempDirPath = await tempDir();
+      const fileName = `print-email-${Date.now()}.html`;
+      const filePath = await join(tempDirPath, fileName);
+
+      await writeTextFile(filePath, htmlContent);
+
+      // Dynamically import open from shell plugin
+      const { open } = await import("@tauri-apps/plugin-shell");
+
+      // Open the file in the default browser
+      await open(`file://${filePath}`);
+
+      toast.success("Print file opened in browser. Use Ctrl/Cmd+P to print.");
+
+      // Clean up temp file after a delay
+      setTimeout(async () => {
+        try {
+          const { remove } = await import("@tauri-apps/plugin-fs");
+          await remove(filePath);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }, 30000); // Clean up after 30 seconds
+    } catch (err) {
+      console.error("Print error:", err);
+      toast.error("Failed to open print. Please try again.");
+    }
+  }, [selectedEmail, activeTab]);
+
+  const handleToggleRead = useCallback(async () => {
+    if (selectedEmail) {
+      if (selectedEmail.is_read) {
+        await markAsUnread(selectedEmail.id);
+        toast.success("Email marked as unread");
+      } else {
+        await markAsRead(selectedEmail.id);
+        toast.success("Email marked as read");
+      }
+    }
+  }, [selectedEmail, markAsRead, markAsUnread]);
+
+  const actionButtons = useMemo(
+    () => [
+      {
+        icon: selectedEmail?.is_read ? <MailMinus /> : <MailOpen />,
+        tooltip: selectedEmail?.is_read ? "Mark as unread" : "Mark as read",
+        onClick: handleToggleRead,
+      },
+      {
+        icon: <Copy />,
+        tooltip: `Copy ${activeTab} content`,
+        onClick: handleCopy,
+      },
+      {
+        icon: <Download />,
+        tooltip: `Download ${activeTab} content`,
+        onClick: handleDownload,
+      },
+      {
+        icon: <Printer />,
+        tooltip: `Print ${activeTab} content`,
+        onClick: handlePrint,
+      },
+      {
+        icon: <Trash2 />,
+        tooltip: "Delete",
+        onClick: () => setShowDeleteDialog(true),
+        className: "text-destructive hover:text-destructive",
+      },
+    ],
+    [
+      selectedEmail,
+      activeTab,
+      handleToggleRead,
+      handleCopy,
+      handleDownload,
+      handlePrint,
+    ],
+  );
 
   if (!selectedEmail) {
     return (
@@ -782,9 +1125,7 @@ function DisplayPane() {
 
   return (
     <div className="w-3/4 flex flex-col rounded-xl bg-background/85 overflow-hidden">
-      {/* Header Actions */}
-      <div className="p-4 flex gap-3 border-b shrink-0">
-        {/* Back button */}
+      <div className="p-4 flex gap-3 border-b shrink-0 items-center">
         <IconButton
           icon={<ArrowLeft />}
           variant="ghost"
@@ -793,31 +1134,18 @@ function DisplayPane() {
           tooltip="Back to list"
         />
 
-        {/* Delete icon */}
-        <IconButton
-          icon={<Trash2 />}
-          variant="ghost"
-          tooltip="Delete"
-          onClick={() => setShowDeleteDialog(true)}
-          className="text-destructive hover:text-destructive"
-        />
-        {/* Copy button */}
-        <IconButton
-          icon={<Copy />}
-          variant="ghost"
-          tooltip="Copy content"
-          onClick={handleCopy}
-        />
-        {/* Download */}
-        <IconButton
-          icon={<Download />}
-          variant="ghost"
-          tooltip="Download"
-          onClick={handleDownload}
-        />
+        {actionButtons.map((action, index) => (
+          <IconButton
+            key={index}
+            icon={action.icon}
+            variant="ghost"
+            tooltip={action.tooltip}
+            onClick={action.onClick}
+            className={action.className}
+          />
+        ))}
       </div>
 
-      {/* Sender details */}
       <div className="flex gap-3 p-6 shrink-0">
         <Avatar size="lg">
           <AvatarImage />
@@ -830,10 +1158,9 @@ function DisplayPane() {
           <span className="text-sm">
             <span className="text-sm font-semibold">
               {selectedEmail.sender_name}
-            </span>{" "}
-            <span className="text-muted-foreground">
-              {"<" + selectedEmail.from + ">"}
             </span>
+            {" • "}
+            <span className="text-muted-foreground">{selectedEmail.from}</span>
           </span>
           <span className="text-sm text-muted-foreground">
             to: {selectedEmail.recipient_name || selectedEmail.to?.join(", ")}
@@ -850,15 +1177,14 @@ function DisplayPane() {
         </span>
       </div>
 
-      {/* Subject */}
       <span className="text-xl font-extrabold p-4 px-6 ml-2 shrink-0">
         {selectedEmail.subject || "(No Subject)"}
       </span>
 
-      {/* Tabs for different content */}
       <Tabs
         className="flex-1 flex flex-col min-h-0 px-6 pb-4"
-        defaultValue="text"
+        value={activeTab}
+        onValueChange={setActiveTab}
       >
         <TabsList variant="line" className="shrink-0">
           <TabsTrigger value="text">Text</TabsTrigger>
@@ -1029,7 +1355,7 @@ function DisplayPane() {
           className="flex-1 min-h-0 mt-4 overflow-auto"
         >
           {selectedEmail.attachments && selectedEmail.attachments.length > 0 ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {selectedEmail.attachments.map((attachment, index) => (
                 <Attachment attachment={attachment} key={index} />
               ))}
@@ -1042,7 +1368,6 @@ function DisplayPane() {
         </TabsContent>
       </Tabs>
 
-      {/* Delete Confirmation Dialog for Display Pane */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1071,7 +1396,6 @@ function DisplayPane() {
 function Attachment({ attachment }: { attachment: AttachmentType }) {
   return (
     <div className="flex flex-col w-60 rounded-lg border overflow-hidden bg-card hover:bg-accent/50 transition-colors cursor-pointer group">
-      {/* Preview area */}
       <div className="h-40 w-full bg-muted/30 flex items-center justify-center">
         {attachment.content_type?.startsWith("image/") ? (
           <img
@@ -1084,7 +1408,6 @@ function Attachment({ attachment }: { attachment: AttachmentType }) {
         )}
       </div>
 
-      {/* File info */}
       <div className="p-3 flex flex-col gap-1 border-t">
         <div className="flex items-center gap-2">
           <File className="size-4 mt-0.5 shrink-0 text-muted-foreground" />
@@ -1110,11 +1433,10 @@ function Attachment({ attachment }: { attachment: AttachmentType }) {
 export default function Inbox() {
   const { emails, isEmailsLoading, refreshEmails } = useAppContext();
 
-  const handleRefresh = useCallback(async () => {
-    await refreshEmails();
+  const handleRefresh = useCallback(() => {
+    void refreshEmails();
   }, [refreshEmails]);
 
-  // Show loading spinner on initial load
   if (isEmailsLoading && emails.length === 0) {
     return (
       <div className="w-full h-full flex justify-center items-center">
@@ -1123,7 +1445,6 @@ export default function Inbox() {
     );
   }
 
-  // Show empty state
   if (emails.length === 0) {
     return (
       <div className="h-full pr-1.5 pb-1.5">
@@ -1145,20 +1466,10 @@ export default function Inbox() {
     );
   }
 
-  // Show inbox with emails
   return (
     <div className="w-full h-full flex gap-1.5 pb-1.5 pr-1.5">
       <ListPane />
       <DisplayPane />
     </div>
   );
-}
-
-// ==================== Utility Functions ====================
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }

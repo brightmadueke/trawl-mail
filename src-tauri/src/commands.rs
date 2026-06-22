@@ -362,3 +362,25 @@ pub fn get_server_config(
 
     Ok(status.config)
 }
+
+/// Marks an email as unread
+#[tauri::command]
+pub fn mark_email_as_unread(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    email_id: String,
+) -> std::result::Result<bool, String> {
+    let mut store = state.email_store.write();
+    if store.mark_as_unread(&email_id) {
+        // Log the unread action
+        store.add_log(
+            "DEBUG",
+            &format!("Email marked as unread: {}", email_id),
+            Some(email_id.clone()),
+        );
+        let _ = app_handle.emit("email-unread", &email_id);
+        Ok(true)
+    } else {
+        Err(format!("Email not found: {}", email_id))
+    }
+}
