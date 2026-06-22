@@ -1,7 +1,3 @@
-// ============================================================================
-// TYPES
-// ============================================================================
-
 import { Email } from "@/types/app.ts";
 
 export type DeviceType =
@@ -36,18 +32,53 @@ export type EmailClient =
 
 export type ThemeMode = "light" | "dark";
 
+export interface ButtonPosition {
+  type: "volume-up" | "volume-down" | "power" | "action" | "mute";
+  y: number; // Percentage from top (0-100)
+  height: number; // Percentage of device height
+  width: number; // In pixels
+  side: "left" | "right" | "top";
+}
+
+export interface CameraConfig {
+  type: "dynamic-island" | "notch" | "punch-hole" | "teardrop" | "none";
+  width: number; // Percentage of device width
+  height?: number; // For dynamic island/notch
+  topOffset?: number; // Percentage from top
+  leftOffset?: number; // Percentage from left (for punch-hole)
+  backgroundColor?: string;
+}
+
 export interface DeviceConfig {
   name: string;
   brand: string;
   width: number;
   height: number;
   frameColor: string;
+  frameGradient: string;
+  frameBorderColor: string;
   borderRadius: number;
+  screenBorderRadius: number;
+  bezelWidth: number;
+  bezelColor: string;
   hasNotch: boolean;
   hasDynamicIsland: boolean;
   hasHomeBar: boolean;
   category: "phone" | "tablet" | "laptop" | "desktop";
   dpi: number;
+  camera: CameraConfig;
+  buttons: ButtonPosition[];
+  screenGlare: {
+    enabled: boolean;
+    intensity: number;
+    angle: number;
+  };
+  homeIndicatorStyle?: {
+    color?: string;
+    width?: string;
+    height?: string;
+    bottom?: string;
+  };
 }
 
 export interface EmailClientConfig {

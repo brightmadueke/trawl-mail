@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import type { EmailClientConfig, ThemeMode } from "@/types/html-preview";
+import type { EmailClientConfig, ThemeMode } from "@/types/html-preview.ts";
 
 // ============================================================================
 // TYPES

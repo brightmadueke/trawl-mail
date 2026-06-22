@@ -33,6 +33,78 @@ const STORE_KEYS = {
   NOTIFICATIONS: "notifications_enabled",
 } as const;
 
+// ==================== Dev Mode Default Emails ====================
+const DEV_DEFAULT_EMAILS: Email[] = [
+  {
+    id: "dev-1",
+    to: ["user@example.com"],
+    from: "john.doe@company.com",
+    sender_name: "John Doe",
+    recipient_name: "User",
+    subject: "Welcome to the Development Environment",
+    html: "<p>This is a test email for development purposes.</p>",
+    text: "This is a test email for development purposes.",
+    date: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+    is_read: false,
+  },
+  {
+    id: "dev-2",
+    to: ["user@example.com"],
+    from: "jane.smith@startup.io",
+    sender_name: "Jane Smith",
+    recipient_name: "User",
+    subject: "Project Update - Q3 Milestones",
+    html: "<p>Here's the latest update on our Q3 milestones.</p><p>We're making great progress!</p>",
+    text: "Here's the latest update on our Q3 milestones.\nWe're making great progress!",
+    date: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+    is_read: false,
+    cc: ["manager@startup.io"],
+  },
+  {
+    id: "dev-3",
+    to: ["user@example.com"],
+    from: "noreply@github.com",
+    sender_name: "GitHub",
+    recipient_name: "User",
+    subject: "[repo-name] Pull request #42: Feature branch merged",
+    html: "<p>Pull request #42 has been merged into main.</p><p><strong>Feature: Add new authentication system</strong></p>",
+    text: "Pull request #42 has been merged into main.\nFeature: Add new authentication system",
+    date: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+    is_read: true,
+    attachments: [
+      {
+        filename: "changelog.md",
+        content_type: "text/markdown",
+        size: 1024,
+      },
+    ],
+  },
+  {
+    id: "dev-4",
+    to: ["user@example.com"],
+    from: "team@slack.com",
+    sender_name: "Slack",
+    recipient_name: "User",
+    subject: "You have 5 new mentions in #general",
+    html: "<p>You were mentioned by @alex, @sarah, and 3 others in #general.</p>",
+    text: "You were mentioned by @alex, @sarah, and 3 others in #general.",
+    date: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
+    is_read: false,
+  },
+  {
+    id: "dev-5",
+    to: ["user@example.com"],
+    from: "newsletter@techweekly.com",
+    sender_name: "Tech Weekly",
+    recipient_name: "User",
+    subject: "This Week in Tech: AI Breakthroughs and Web Development Trends",
+    html: "<h1>This Week in Tech</h1><p>Top stories this week:</p><ul><li>New AI model achieves breakthrough</li><li>React 19 announced</li><li>WebAssembly gains traction</li></ul>",
+    text: "This Week in Tech\nTop stories this week:\n- New AI model achieves breakthrough\n- React 19 announced\n- WebAssembly gains traction",
+    date: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+    is_read: true,
+  },
+];
+
 // ==================== Settings type definition ====================
 interface AppSettings {
   serverConfig?: ServerConfig;
@@ -49,6 +121,12 @@ interface AppSettings {
 // ==================== Utility Functions ====================
 function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function isDevMode(): boolean {
+  // Check if we're in development mode
+  // This works with both Vite and CRA
+  return import.meta.env.DEV || process.env.NODE_ENV === "development";
 }
 
 // ==================== Context Type Definition ====================
@@ -76,6 +154,10 @@ interface AppContextType {
   clearLogs: () => Promise<void>;
   toggleLogsPause: () => void;
   refreshAll: () => Promise<void>;
+  // Email management methods
+  deleteEmail: (emailId: string) => Promise<void>;
+  clearAllEmails: () => Promise<void>;
+  deleteSelectedEmail: () => Promise<void>;
   // Settings methods
   settings: AppSettings;
   saveSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
@@ -132,11 +214,25 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isServerRestarting, setIsServerRestarting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const [emails, setEmails] = useState<Email[]>([]);
+  // Initialize emails with dev defaults if in dev mode
+  const [emails, setEmails] = useState<Email[]>(() => {
+    if (isDevMode()) {
+      return DEV_DEFAULT_EMAILS;
+    }
+    return [];
+  });
+
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [isEmailsLoading, setIsEmailsLoading] = useState(false);
   const [emailsError, setEmailsError] = useState<string | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Initialize unread count based on dev emails
+  const [unreadCount, setUnreadCount] = useState(() => {
+    if (isDevMode()) {
+      return DEV_DEFAULT_EMAILS.filter((email) => !email.is_read).length;
+    }
+    return 0;
+  });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
@@ -284,20 +380,43 @@ export function AppProvider({ children }: AppProviderProps) {
   // ==================== Core Functions ====================
 
   // Define selectEmail first
-  const selectEmail = useCallback(async (email: Email | null) => {
-    setSelectedEmail(email);
-    if (email && !email.is_read) {
-      try {
-        await invoke<boolean>("mark_email_as_read", { emailId: email.id });
-        setEmails((prev) =>
-          prev.map((e) => (e.id === email.id ? { ...e, is_read: true } : e)),
-        );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-      } catch (err) {
-        console.error("Failed to mark email as read:", formatError(err));
+  const selectEmail = useCallback(
+    async (email: Email | null) => {
+      setSelectedEmail(email);
+      if (email && !email.is_read) {
+        try {
+          // In dev mode without a backend, just update the state locally
+          if (isDevMode() && !serverStatus.is_running) {
+            setEmails((prev) =>
+              prev.map((e) =>
+                e.id === email.id ? { ...e, is_read: true } : e,
+              ),
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+            return;
+          }
+
+          await invoke<boolean>("mark_email_as_read", { emailId: email.id });
+          setEmails((prev) =>
+            prev.map((e) => (e.id === email.id ? { ...e, is_read: true } : e)),
+          );
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+        } catch (err) {
+          console.error("Failed to mark email as read:", formatError(err));
+          // In dev mode, still update the state even if the backend call fails
+          if (isDevMode()) {
+            setEmails((prev) =>
+              prev.map((e) =>
+                e.id === email.id ? { ...e, is_read: true } : e,
+              ),
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+          }
+        }
       }
-    }
-  }, []);
+    },
+    [serverStatus.is_running],
+  );
 
   // Update selectEmailRef when selectEmail changes
   useEffect(() => {
@@ -349,6 +468,11 @@ export function AppProvider({ children }: AppProviderProps) {
         },
       });
 
+      // In dev mode without a backend, skip the system notification
+      if (isDevMode() && !serverStatus.is_running) {
+        return;
+      }
+
       // 2. Send Tauri system notification
       let hasPermission = await isPermissionGranted();
       if (!hasPermission) {
@@ -380,6 +504,7 @@ export function AppProvider({ children }: AppProviderProps) {
       settings.notificationsEnabled,
       settings.soundAlerts,
       settings.desktopNotifications,
+      serverStatus.is_running,
     ],
   );
 
@@ -496,6 +621,16 @@ export function AppProvider({ children }: AppProviderProps) {
     setIsEmailsLoading(true);
     setEmailsError(null);
     try {
+      // In dev mode without a running server, return the dev emails
+      if (isDevMode() && !serverStatus.is_running) {
+        // Don't overwrite emails if we already have them
+        if (emails.length === 0) {
+          setEmails(DEV_DEFAULT_EMAILS);
+          setUnreadCount(DEV_DEFAULT_EMAILS.filter((e) => !e.is_read).length);
+        }
+        return;
+      }
+
       const [loadedEmails, count] = await Promise.all([
         invoke<Email[]>("get_all_emails"),
         invoke<number>("get_unread_count"),
@@ -503,23 +638,51 @@ export function AppProvider({ children }: AppProviderProps) {
       setEmails(loadedEmails);
       setUnreadCount(count);
     } catch (err) {
-      setEmailsError(formatError(err));
+      // In dev mode, if the backend call fails, use default emails
+      if (isDevMode()) {
+        console.log("Using dev mode default emails (backend not available)");
+        if (emails.length === 0) {
+          setEmails(DEV_DEFAULT_EMAILS);
+          setUnreadCount(DEV_DEFAULT_EMAILS.filter((e) => !e.is_read).length);
+        }
+      } else {
+        setEmailsError(formatError(err));
+      }
     } finally {
       setIsEmailsLoading(false);
     }
-  }, []);
+  }, [serverStatus.is_running, emails.length]);
 
-  const markAsRead = useCallback(async (emailId: string) => {
-    try {
-      await invoke<boolean>("mark_email_as_read", { emailId });
-      setEmails((prev) =>
-        prev.map((e) => (e.id === emailId ? { ...e, is_read: true } : e)),
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (err) {
-      console.error("Failed to mark email as read:", formatError(err));
-    }
-  }, []);
+  const markAsRead = useCallback(
+    async (emailId: string) => {
+      try {
+        // In dev mode without a running server, just update state locally
+        if (isDevMode() && !serverStatus.is_running) {
+          setEmails((prev) =>
+            prev.map((e) => (e.id === emailId ? { ...e, is_read: true } : e)),
+          );
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+          return;
+        }
+
+        await invoke<boolean>("mark_email_as_read", { emailId });
+        setEmails((prev) =>
+          prev.map((e) => (e.id === emailId ? { ...e, is_read: true } : e)),
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch (err) {
+        console.error("Failed to mark email as read:", formatError(err));
+        // In dev mode, still update state locally
+        if (isDevMode()) {
+          setEmails((prev) =>
+            prev.map((e) => (e.id === emailId ? { ...e, is_read: true } : e)),
+          );
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+        }
+      }
+    },
+    [serverStatus.is_running],
+  );
 
   useEffect(() => {
     refreshEmailsRef.current = refreshEmails;
@@ -529,6 +692,13 @@ export function AppProvider({ children }: AppProviderProps) {
     if (isInitialLogsLoadRef.current) setIsLogsLoading(true);
     setLogsError(null);
     try {
+      // In dev mode without a running server, set empty logs
+      if (isDevMode() && !serverStatus.is_running) {
+        setLogs([]);
+        isInitialLogsLoadRef.current = false;
+        return;
+      }
+
       const clearedAt = logsClearedAtRef.current;
       const serverLogs = clearedAt
         ? await invoke<LogEntry[]>("get_server_logs_filtered", {
@@ -541,11 +711,17 @@ export function AppProvider({ children }: AppProviderProps) {
       setLogs(serverLogs);
       isInitialLogsLoadRef.current = false;
     } catch (err) {
-      setLogsError(formatError(err));
+      // In dev mode, just set empty logs
+      if (isDevMode()) {
+        setLogs([]);
+        isInitialLogsLoadRef.current = false;
+      } else {
+        setLogsError(formatError(err));
+      }
     } finally {
       setIsLogsLoading(false);
     }
-  }, []);
+  }, [serverStatus.is_running]);
 
   const clearLogs = useCallback(async () => {
     try {
@@ -567,12 +743,139 @@ export function AppProvider({ children }: AppProviderProps) {
     setIsLogsPaused((prev) => !prev);
   }, []);
 
+  // ==================== Email Management Functions ====================
+
+  const deleteEmail = useCallback(
+    async (emailId: string) => {
+      try {
+        // In dev mode without a running server, just update state locally
+        if (isDevMode() && !serverStatus.is_running) {
+          const deletedEmail = emails.find((e) => e.id === emailId);
+          setEmails((prev) => prev.filter((e) => e.id !== emailId));
+          if (deletedEmail && !deletedEmail.is_read) {
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+          }
+          // If the deleted email was selected, clear selection
+          setSelectedEmail((prev) => (prev?.id === emailId ? null : prev));
+          toast.success("Email deleted");
+          return;
+        }
+
+        await invoke<boolean>("delete_email", { emailId });
+
+        const deletedEmail = emails.find((e) => e.id === emailId);
+        setEmails((prev) => prev.filter((e) => e.id !== emailId));
+
+        // Update unread count if needed
+        if (deletedEmail && !deletedEmail.is_read) {
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+        }
+
+        // Update server status counts
+        setServerStatus((prev) => ({
+          ...prev,
+          total_emails: Math.max(0, prev.total_emails - 1),
+          unread_emails:
+            deletedEmail && !deletedEmail.is_read
+              ? Math.max(0, prev.unread_emails - 1)
+              : prev.unread_emails,
+        }));
+
+        // If the deleted email was selected, clear selection
+        setSelectedEmail((prev) => (prev?.id === emailId ? null : prev));
+
+        toast.success("Email deleted successfully");
+      } catch (err) {
+        const message = formatError(err);
+        console.error("Failed to delete email:", message);
+
+        // In dev mode, still update state locally
+        if (isDevMode()) {
+          const deletedEmail = emails.find((e) => e.id === emailId);
+          setEmails((prev) => prev.filter((e) => e.id !== emailId));
+          if (deletedEmail && !deletedEmail.is_read) {
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+          }
+          setSelectedEmail((prev) => (prev?.id === emailId ? null : prev));
+          toast.success("Email deleted (dev mode)");
+        } else {
+          toast.error(`Failed to delete email: ${message}`);
+          throw err;
+        }
+      }
+    },
+    [serverStatus.is_running, emails],
+  );
+
+  const clearAllEmails = useCallback(async () => {
+    try {
+      // In dev mode without a running server, just update state locally
+      if (isDevMode() && !serverStatus.is_running) {
+        setEmails([]);
+        setUnreadCount(0);
+        setSelectedEmail(null);
+        setServerStatus((prev) => ({
+          ...prev,
+          total_emails: 0,
+          unread_emails: 0,
+        }));
+        toast.success("All emails cleared");
+        return;
+      }
+
+      await invoke("clear_all_emails");
+
+      setEmails([]);
+      setUnreadCount(0);
+      setSelectedEmail(null);
+      setServerStatus((prev) => ({
+        ...prev,
+        total_emails: 0,
+        unread_emails: 0,
+      }));
+
+      toast.success("All emails cleared successfully");
+    } catch (err) {
+      const message = formatError(err);
+      console.error("Failed to clear all emails:", message);
+
+      // In dev mode, still update state locally
+      if (isDevMode()) {
+        setEmails([]);
+        setUnreadCount(0);
+        setSelectedEmail(null);
+        setServerStatus((prev) => ({
+          ...prev,
+          total_emails: 0,
+          unread_emails: 0,
+        }));
+        toast.success("All emails cleared (dev mode)");
+      } else {
+        toast.error(`Failed to clear emails: ${message}`);
+        throw err;
+      }
+    }
+  }, [serverStatus.is_running]);
+
+  // Helper function to delete the currently selected email
+  const deleteSelectedEmail = useCallback(async () => {
+    if (selectedEmail) {
+      await deleteEmail(selectedEmail.id);
+    }
+  }, [selectedEmail, deleteEmail]);
+
   useEffect(() => {
     refreshLogsRef.current = refreshLogs;
   }, [refreshLogs]);
 
   const startAllAutoRefresh = useCallback(async () => {
     clearAllTimers();
+
+    // In dev mode without a running server, don't start auto-refresh
+    if (isDevMode() && !serverStatus.is_running) {
+      return;
+    }
+
     await Promise.allSettled([
       refreshEmailsRef.current?.(),
       refreshLogsRef.current?.(),
@@ -590,7 +893,7 @@ export function AppProvider({ children }: AppProviderProps) {
         .then(setServerStatus)
         .catch(console.error);
     }, AUTO_REFRESH.STATUS_INTERVAL);
-  }, [clearAllTimers]);
+  }, [clearAllTimers, serverStatus.is_running]);
 
   const stopAllAutoRefresh = useCallback(() => {
     clearAllTimers();
@@ -670,6 +973,7 @@ export function AppProvider({ children }: AppProviderProps) {
         );
         unlistenFunctions.push(unlisten3);
       } catch (err) {
+        // Always log the error - don't suppress it
         console.error("Failed to set up event listeners:", formatError(err));
       }
     };
@@ -721,6 +1025,11 @@ export function AppProvider({ children }: AppProviderProps) {
     clearLogs,
     toggleLogsPause,
     refreshAll,
+    // Email management methods
+    deleteEmail,
+    clearAllEmails,
+    deleteSelectedEmail,
+    // Settings methods
     settings,
     saveSettings,
     loadSettings,

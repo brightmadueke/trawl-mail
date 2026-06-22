@@ -1,351 +1,302 @@
+import { useCallback, useMemo, useRef, useState } from "react";
+import { cn } from "@/lib/utils.ts";
+import { TooltipProvider } from "@/components/ui/tooltip.tsx";
+import { Info } from "lucide-react";
+import { DeviceMockup } from "./device-mockup.tsx";
+import { PreviewControls } from "./preview-controls.tsx";
+import { DEVICES } from "@/components/html-preview/data/devices.ts";
+import { EMAIL_CLIENTS } from "@/components/html-preview/data/email-clients.tsx";
+import type { DeviceType, EmailClient, HTMLPreviewProps, ThemeMode } from "@/types/html-preview.ts";
+
 // ============================================================================
-// html-preview/html-preview.tsx
-// Main orchestrator component for HTML email preview
+// MAIN COMPONENT
 // ============================================================================
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import DeviceMockup from "./device-mockup";
-import EmailClientMockup from "./email-client-mockup";
-import PreviewControls from "./preview-controls";
-import { defaultDevices } from "./data/devices";
-import { defaultEmailClients } from "./data/email-clients";
-import type { HTMLPreviewProps, ThemeMode } from "./types";
-
-/**
- * HTMLPreview is the main component for previewing HTML email content
- * across different device sizes and email client UIs.
- *
- * Features:
- * - Device frame simulation (mobile, tablet, desktop)
- * - Multiple email client UI chrome options
- * - Zoom control (25-200%)
- * - Light/dark theme toggle
- * - Fullscreen mode via portal
- * - Copy, download, and open-in-browser actions
- * - Auto-scales to fill parent container height
- * - Supports custom email client UIs and custom devices
- */
-const HTMLPreview: React.FC<HTMLPreviewProps> = ({
+export function HTMLPreview({
   htmlContent,
-  className = "",
+  className,
+  selectedEmail,
   onFullscreenChange,
-  defaultDevice = "desktop-1080p",
-  defaultEmailClient = "simple",
-  defaultShowFrame = true,
-  defaultZoom = 100,
-  subject = "Email Subject",
-  senderName = "Sender Name",
-  senderEmail = "sender@example.com",
-  timestamp = new Date().toLocaleString(),
-  customEmailClients = [],
-  customDevices = [],
-}) => {
-  // ======================== State ========================
+}: HTMLPreviewProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [deviceId, setDeviceId] = useState(defaultDevice);
-  const [emailClientId, setEmailClientId] = useState(defaultEmailClient);
+  const [device, setDevice] = useState<DeviceType>("iphone-15-pro");
+  const [emailClient, setEmailClient] = useState<EmailClient>("apple-mail");
   const [theme, setTheme] = useState<ThemeMode>("light");
-  const [zoom, setZoom] = useState(defaultZoom);
-  const [localZoom, setLocalZoom] = useState(defaultZoom);
-  const [showFrame, setShowFrame] = useState(defaultShowFrame);
+  const [zoom, setZoom] = useState(75);
+  const [localZoom, setLocalZoom] = useState(75);
+  const [showFrame, setShowFrame] = useState(true);
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">(
+    "portrait",
+  );
   const [iframeKey, setIframeKey] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Ref for the fullscreen portal container
-  const portalRef = useRef<HTMLDivElement | null>(null);
+  const deviceConfig = DEVICES[device];
+  const clientConfig = EMAIL_CLIENTS[emailClient];
 
-  // ======================== Data ========================
-
-  /**
-   * Merge default devices with any custom devices provided by the user.
-   * Custom devices with the same ID will override defaults.
-   */
-  const allDevices = useMemo(() => {
-    const merged = [...defaultDevices];
-    for (const custom of customDevices) {
-      const idx = merged.findIndex((d) => d.id === custom.id);
-      if (idx >= 0) {
-        merged[idx] = custom;
-      } else {
-        merged.push(custom);
-      }
-    }
-    return merged;
-  }, [customDevices]);
-
-  /**
-   * Merge default email clients with custom clients.
-   */
-  const allEmailClients = useMemo(() => {
-    const merged = [...defaultEmailClients];
-    for (const custom of customEmailClients) {
-      const idx = merged.findIndex((c) => c.id === custom.config.id);
-      if (idx >= 0) {
-        merged[idx] = custom.config;
-      } else {
-        merged.push(custom.config);
-      }
-    }
-    return merged;
-  }, [customEmailClients]);
-
-  /**
-   * Build a Map of custom email client components for fast lookup.
-   */
-  const customClientsMap = useMemo(() => {
-    const map = new Map<string, React.ComponentType<any>>();
-    for (const custom of customEmailClients) {
-      map.set(custom.config.id, custom.component);
-    }
-    return map;
-  }, [customEmailClients]);
-
-  /**
-   * Current device configuration.
-   */
-  const deviceConfig = useMemo(
-    () => allDevices.find((d) => d.id === deviceId) || allDevices[0],
-    [allDevices, deviceId],
-  );
-
-  /**
-   * Current email client configuration.
-   */
-  const clientConfig = useMemo(
+  // Calculate display dimensions based on orientation
+  const displayWidth = useMemo(
     () =>
-      allEmailClients.find((c) => c.id === emailClientId) || allEmailClients[0],
-    [allEmailClients, emailClientId],
+      orientation === "landscape" ? deviceConfig.height : deviceConfig.width,
+    [deviceConfig, orientation],
   );
 
-  // ======================== Handlers ========================
+  const displayHeight = useMemo(
+    () =>
+      orientation === "landscape" ? deviceConfig.width : deviceConfig.height,
+    [deviceConfig, orientation],
+  );
 
-  const handleDeviceChange = useCallback((id: string) => {
-    setDeviceId(id);
-  }, []);
+  // ============================================================================
+  // EVENT HANDLERS
+  // ============================================================================
 
-  const handleEmailClientChange = useCallback((id: string) => {
-    setEmailClientId(id);
-  }, []);
+  // Fullscreen toggle - forces iframe remount to ensure content loads
+  const handleFullscreenToggle = useCallback(() => {
+    setIsFullscreen((prev) => {
+      const newState = !prev;
+      onFullscreenChange?.(newState);
+      if (newState) {
+        setZoom(100);
+        setLocalZoom(100);
+        setIframeKey((prev) => prev + 1);
+      }
+      return newState;
+    });
+  }, [onFullscreenChange]);
 
+  // Theme toggle
   const handleThemeToggle = useCallback(() => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   }, []);
 
+  // Device change
+  const handleDeviceChange = useCallback((newDevice: DeviceType) => {
+    setDevice(newDevice);
+  }, []);
+
+  // Email client change
+  const handleEmailClientChange = useCallback((newClient: EmailClient) => {
+    setEmailClient(newClient);
+  }, []);
+
+  // Zoom handlers with smooth updates
   const handleZoomChange = useCallback((values: number[]) => {
-    setLocalZoom(values[0]);
-  }, []);
-
-  const handleZoomCommit = useCallback((values: number[]) => {
-    setZoom(values[0]);
+    const newZoom = values[0];
+    setLocalZoom(newZoom);
+    setZoom(newZoom);
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    setZoom((prev) => Math.min(200, prev + 10));
-    setLocalZoom((prev) => Math.min(200, prev + 10));
+    setZoom((prev) => {
+      const newZoom = Math.min(prev + 10, 200);
+      setLocalZoom(newZoom);
+      return newZoom;
+    });
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setZoom((prev) => Math.max(25, prev - 10));
-    setLocalZoom((prev) => Math.max(25, prev - 10));
+    setZoom((prev) => {
+      const newZoom = Math.max(prev - 10, 25);
+      setLocalZoom(newZoom);
+      return newZoom;
+    });
   }, []);
 
+  // Frame toggle
   const handleFrameToggle = useCallback(() => {
     setShowFrame((prev) => !prev);
   }, []);
 
+  // Orientation toggle (only for phones/tablets)
+  const handleOrientationToggle = useCallback(() => {
+    setOrientation((prev) => (prev === "portrait" ? "landscape" : "portrait"));
+  }, []);
+
+  // Copy HTML to clipboard
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(htmlContent);
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement("textarea");
-      textarea.value = htmlContent;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
+    } catch (error) {
+      console.error("Failed to copy:", error);
     }
   }, [htmlContent]);
 
+  // Download HTML as file
   const handleDownload = useCallback(() => {
     const blob = new Blob([htmlContent], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "email-preview.html";
+    a.download = `email-preview-${Date.now()}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [htmlContent]);
 
+  // Open in new browser tab
   const handleOpenInBrowser = useCallback(() => {
-    const blob = new Blob([htmlContent], { type: "text/html" });
+    const emailHTML = htmlContent;
+    const blob = new Blob([emailHTML], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    window.open(url, "_blank", "noopener,noreferrer");
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [htmlContent]);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }, [htmlContent, clientConfig, theme]);
 
-  /**
-   * Toggle fullscreen mode.
-   * Resets zoom to 100% and increments iframeKey to force remount.
-   * Notifies parent via onFullscreenChange callback.
-   */
-  const handleFullscreenToggle = useCallback(() => {
-    setIsFullscreen((prev) => {
-      const next = !prev;
-      if (next) {
-        setZoom(100);
-        setLocalZoom(100);
-      }
-      setIframeKey((k) => k + 1);
-      onFullscreenChange?.(next);
-      return next;
-    });
-  }, [onFullscreenChange]);
+  // ============================================================================
+  // SCALE CALCULATION
+  // ============================================================================
 
-  // ======================== Effects ========================
+  // Calculate the scale factor to fit the device in the container
+  const scale = useMemo(() => {
+    if (!containerRef.current) return 1;
 
-  /**
-   * Create/destroy the fullscreen portal container.
-   * This mounts a div directly on document.body for fullscreen rendering.
-   */
-  useEffect(() => {
-    if (isFullscreen) {
-      const div = document.createElement("div");
-      div.id = "html-preview-fullscreen-portal";
-      div.style.cssText =
-        "position:fixed;inset:0;z-index:9999;background:#000;";
-      document.body.appendChild(div);
-      portalRef.current = div;
+    const container = containerRef.current;
+    const padding = 48;
+    const controlsHeight = isFullscreen ? 64 : 48;
+    const containerWidth = container.clientWidth - padding * 2;
+    const containerHeight =
+      container.clientHeight - padding * 2 - controlsHeight;
 
-      // Prevent body scroll when fullscreen is active
-      document.body.style.overflow = "hidden";
+    if (!containerWidth || !containerHeight) return 1;
 
-      return () => {
-        document.body.removeChild(div);
-        document.body.style.overflow = "";
-        portalRef.current = null;
-      };
-    }
-  }, [isFullscreen]);
+    const frameWidth = showFrame
+      ? displayWidth + (deviceConfig.category === "phone" ? 12 : 20)
+      : displayWidth;
+    const frameHeight = showFrame
+      ? displayHeight + (deviceConfig.category === "phone" ? 40 : 50)
+      : displayHeight;
 
-  /**
-   * Handle Escape key to exit fullscreen.
-   */
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isFullscreen) {
-        handleFullscreenToggle();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFullscreen, handleFullscreenToggle]);
+    const scaleX = containerWidth / frameWidth;
+    const scaleY = containerHeight / frameHeight;
 
-  // ======================== Render ========================
+    return Math.min(scaleX, scaleY, localZoom / 100);
+  }, [
+    deviceConfig,
+    localZoom,
+    displayWidth,
+    displayHeight,
+    showFrame,
+    isFullscreen,
+  ]);
 
-  /**
-   * Calculate scale factor for the preview.
-   * This maps the device's native resolution to the display size
-   * multiplied by the user's zoom preference.
-   */
-  const scale = zoom / 100;
+  // ============================================================================
+  // RENDER HELPERS
+  // ============================================================================
 
-  /**
-   * The core preview content: device frame wrapping email client UI.
-   */
-  const previewContent = (
-    <div
-      className={`relative inline-block ${isFullscreen ? "h-full w-full flex items-center justify-center" : ""}`}
-      style={{
-        transform: isFullscreen ? "none" : `scale(${scale})`,
-        transformOrigin: "top center",
-      }}
-    >
-      <DeviceMockup
-        deviceConfig={deviceConfig}
-        showFrame={showFrame}
-        theme={theme}
-        scale={isFullscreen ? 1 : undefined}
+  // Render the controls bar
+  const renderControls = (isFullscreenView: boolean) => (
+    <PreviewControls
+      device={device}
+      emailClient={emailClient}
+      theme={theme}
+      zoom={zoom}
+      localZoom={localZoom}
+      showFrame={showFrame}
+      orientation={orientation}
+      displayWidth={displayWidth}
+      displayHeight={displayHeight}
+      isFullscreen={isFullscreenView}
+      onDeviceChange={handleDeviceChange}
+      onEmailClientChange={handleEmailClientChange}
+      onThemeToggle={handleThemeToggle}
+      onZoomChange={handleZoomChange}
+      onZoomIn={handleZoomIn}
+      onZoomOut={handleZoomOut}
+      onFrameToggle={handleFrameToggle}
+      onOrientationToggle={handleOrientationToggle}
+      onCopy={handleCopy}
+      onDownload={handleDownload}
+      onOpenInBrowser={handleOpenInBrowser}
+      onFullscreenToggle={handleFullscreenToggle}
+    />
+  );
+
+  // Render the device preview with email client
+  const renderDevicePreview = (isFullscreenView: boolean) => (
+    <DeviceMockup
+      deviceConfig={deviceConfig}
+      clientConfig={clientConfig}
+      htmlContent={htmlContent}
+      theme={theme}
+      emailClient={emailClient}
+      showFrame={showFrame}
+      orientation={orientation}
+      scale={scale}
+      selectedEmail={selectedEmail}
+      iframeKey={iframeKey}
+      className={isFullscreenView ? "shadow-black/50" : undefined}
+    />
+  );
+
+  // Render the full layout
+  const renderContent = (isFullscreenView: boolean) => (
+    <TooltipProvider>
+      <div
+        className={cn(
+          "flex flex-col h-full",
+          isFullscreenView
+            ? "fixed inset-0 z-50 bg-black/95 backdrop-blur-sm"
+            : "w-full",
+          className,
+        )}
       >
-        <EmailClientMockup
-          clientConfig={clientConfig}
-          variant={emailClientId}
-          htmlContent={htmlContent}
-          theme={theme}
-          subject={subject}
-          senderName={senderName}
-          senderEmail={senderEmail}
-          timestamp={timestamp}
-          iframeKey={iframeKey}
-          customClients={customClientsMap}
-        />
-      </DeviceMockup>
+        {/* Controls Bar */}
+        {renderControls(isFullscreenView)}
 
-      {/* Preview Controls Overlay */}
-      <PreviewControls
-        device={deviceId}
-        emailClient={emailClientId}
-        theme={theme}
-        zoom={zoom}
-        localZoom={localZoom}
-        showFrame={showFrame}
-        deviceType={deviceConfig.type}
-        isFullscreen={isFullscreen}
-        devices={allDevices}
-        emailClients={allEmailClients}
-        onDeviceChange={handleDeviceChange}
-        onEmailClientChange={handleEmailClientChange}
-        onThemeToggle={handleThemeToggle}
-        onZoomChange={handleZoomChange}
-        onZoomCommit={handleZoomCommit}
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onFrameToggle={handleFrameToggle}
-        onCopy={handleCopy}
-        onDownload={handleDownload}
-        onOpenInBrowser={handleOpenInBrowser}
-        onFullscreenToggle={handleFullscreenToggle}
-      />
-    </div>
-  );
-
-  /**
-   * Main wrapper that fills available parent height.
-   * Centers the preview content horizontally and allows vertical scrolling.
-   */
-  const mainContent = (
-    <div
-      className={`html-preview-root h-full w-full overflow-auto flex justify-center ${className}`}
-      style={{
-        backgroundColor: isFullscreen ? "#000" : "transparent",
-      }}
-    >
-      {/* Spacer for scaling - the scaled content still occupies original space */}
-      {!isFullscreen && (
+        {/* Preview Area */}
         <div
-          style={{
-            width: deviceConfig.width * scale,
-            minHeight: deviceConfig.height * scale,
-            flexShrink: 0,
-          }}
-          className="relative"
+          className={cn(
+            "flex-1 min-h-0 overflow-auto flex items-center justify-center",
+            isFullscreenView ? "p-8" : "bg-muted/20 p-6",
+          )}
+          ref={containerRef}
         >
-          {previewContent}
+          {renderDevicePreview(isFullscreenView)}
         </div>
-      )}
 
-      {isFullscreen && previewContent}
-    </div>
+        {/* Device Label Footer (non-fullscreen only) */}
+        {!isFullscreenView && showFrame && (
+          <div className="text-center py-1.5 bg-muted/10 border-t">
+            <p className="text-[10px] text-muted-foreground font-medium">
+              {deviceConfig.name} • {displayWidth}×{displayHeight} •{" "}
+              {deviceConfig.dpi}dpi • {orientation}
+            </p>
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
   );
 
-  // Render fullscreen in portal, otherwise inline
-  if (isFullscreen && portalRef.current) {
-    return createPortal(mainContent, portalRef.current);
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+
+  // Empty state (when no HTML content and not in fullscreen)
+  if (!htmlContent && !isFullscreen) {
+    return (
+      <div className={cn("flex flex-col h-full w-full", className)}>
+        {renderControls(false)}
+        <div className="flex-1 flex items-center justify-center bg-muted/20">
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-muted/30 flex items-center justify-center">
+              <Info className="h-8 w-8 text-muted-foreground/30" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                No Content to Preview
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Paste or write HTML to see a preview
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  return mainContent;
-};
-
-export default HTMLPreview;
+  // Normal or fullscreen view
+  return renderContent(isFullscreen);
+}

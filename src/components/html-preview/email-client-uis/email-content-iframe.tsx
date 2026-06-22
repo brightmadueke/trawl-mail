@@ -44,9 +44,8 @@ export function EmailContentIframe({
   return (
     <iframe
       ref={iframeRef}
-      className="w-full border-0"
+      className="w-full h-full border-0"
       style={{
-        height: "calc(100vh - 200px)",
         minHeight: "300px",
       }}
       title="Email Content"

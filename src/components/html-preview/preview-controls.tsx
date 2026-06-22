@@ -1,16 +1,9 @@
-// ============================================================================
-// html-preview/preview-controls.tsx
-// Header toolbar for controlling preview settings
-// Uses shadcn/ui components and lucide-react icons
-// ============================================================================
-
-import React, { useCallback } from "react";
-import type { PreviewControlsProps } from "./types";
-import IconButton from "@/components/icon-button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { useMemo } from "react";
+import { Button } from "@/components/ui/button.tsx";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Separator } from "@/components/ui/separator.tsx";
+import { Slider } from "@/components/ui/slider.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,15 +11,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
+} from "@/components/ui/dropdown-menu.tsx";
+import { cn } from "@/lib/utils.ts";
 import {
+  Check,
+  ChevronDown,
   Copy,
   Download,
   ExternalLink,
+  Eye,
   EyeOff,
-  Frame,
-  Mail,
+  Laptop,
   Maximize,
   Minimize,
   Monitor,
@@ -37,357 +32,473 @@ import {
   ZoomIn,
   ZoomOut
 } from "lucide-react";
+import { DEVICES } from "@/components/html-preview/data/devices.ts";
+import { EMAIL_CLIENTS } from "@/components/html-preview/data/email-clients.tsx";
+import type { DeviceConfig, DeviceType, EmailClient, ThemeMode } from "@/types/html-preview.ts";
+import IconButton from "@/components/icon-button.tsx"; // ============================================================================
 
-/**
- * PreviewControls renders a fixed header toolbar above the preview area.
- * Provides device selection, email client selection, zoom controls,
- * theme toggle, and action buttons (copy, download, open, fullscreen).
- *
- * The header is styled to integrate with the parent inbox layout.
- */
-const PreviewControls: React.FC<PreviewControlsProps> = ({
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface PreviewControlsProps {
+  device: DeviceType;
+  emailClient: EmailClient;
+  theme: ThemeMode;
+  zoom: number;
+  localZoom: number;
+  showFrame: boolean;
+  orientation: "portrait" | "landscape";
+  displayWidth: number;
+  displayHeight: number;
+  isFullscreen: boolean;
+  onDeviceChange: (device: DeviceType) => void;
+  onEmailClientChange: (client: EmailClient) => void;
+  onThemeToggle: () => void;
+  onZoomChange: (values: number[]) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFrameToggle: () => void;
+  onOrientationToggle: () => void;
+  onCopy: () => void;
+  onDownload: () => void;
+  onOpenInBrowser: () => void;
+  onFullscreenToggle: () => void;
+}
+
+// ============================================================================
+// PREVIEW CONTROLS COMPONENT
+// ============================================================================
+
+export function PreviewControls({
   device,
   emailClient,
   theme,
   zoom,
   localZoom,
   showFrame,
+  orientation,
+  displayWidth,
+  displayHeight,
   isFullscreen,
-  devices,
-  emailClients,
   onDeviceChange,
   onEmailClientChange,
   onThemeToggle,
   onZoomChange,
-  onZoomCommit,
   onZoomIn,
   onZoomOut,
   onFrameToggle,
+  onOrientationToggle,
   onCopy,
   onDownload,
   onOpenInBrowser,
   onFullscreenToggle,
-  className = "",
-}) => {
-  const isDark = theme === "dark";
+}: PreviewControlsProps) {
+  const deviceConfig = DEVICES[device];
 
-  // Group devices by type for organized dropdown display
-  const groupedDevices = React.useMemo(() => {
-    const groups = {
-      mobile: [] as typeof devices,
-      tablet: [] as typeof devices,
-      desktop: [] as typeof devices,
-    };
+  // Group devices by category
+  const phones = useMemo(
+    () =>
+      Object.entries(DEVICES).filter(
+        ([, config]) => config.category === "phone",
+      ),
+    [],
+  );
+  const tablets = useMemo(
+    () =>
+      Object.entries(DEVICES).filter(
+        ([, config]) => config.category === "tablet",
+      ),
+    [],
+  );
+  const laptops = useMemo(
+    () =>
+      Object.entries(DEVICES).filter(
+        ([, config]) => config.category === "laptop",
+      ),
+    [],
+  );
+  const desktops = useMemo(
+    () =>
+      Object.entries(DEVICES).filter(
+        ([, config]) => config.category === "desktop",
+      ),
+    [],
+  );
 
-    for (const d of devices) {
-      if (d.type === "mobile") groups.mobile.push(d);
-      else if (d.type === "tablet") groups.tablet.push(d);
-      else groups.desktop.push(d);
-    }
-
-    return groups;
-  }, [devices]);
-
-  // Find the currently selected device and client for display
-  const currentDevice = devices.find((d) => d.id === device);
-  const currentClient = emailClients.find((c) => c.id === emailClient);
-
-  /**
-   * Get the appropriate icon for a device type.
-   */
-  const getDeviceTypeIcon = useCallback((type: string) => {
-    switch (type) {
-      case "mobile":
-        return <Smartphone className="w-3.5 h-3.5" />;
-      case "tablet":
-        return <Tablet className="w-3.5 h-3.5" />;
-      default:
-        return <Monitor className="w-3.5 h-3.5" />;
-    }
-  }, []);
-
-  /**
-   * Handle zoom in, clamped to 200% max.
-   */
-  const handleZoomIn = useCallback(() => {
-    if (zoom < 200) {
-      onZoomIn();
-    }
-  }, [zoom, onZoomIn]);
-
-  /**
-   * Handle zoom out, clamped to 25% min.
-   */
-  const handleZoomOut = useCallback(() => {
-    if (zoom > 25) {
-      onZoomOut();
-    }
-  }, [zoom, onZoomOut]);
+  const showOrientationToggle = useMemo(
+    () =>
+      deviceConfig.category === "phone" || deviceConfig.category === "tablet",
+    [deviceConfig.category],
+  );
 
   return (
     <div
-      className={`flex items-center gap-2 px-4 py-2 border-b bg-card text-card-foreground ${className}`}
-      role="toolbar"
-      aria-label="Preview controls"
+      className={cn(
+        "flex items-center gap-2 flex-wrap border-b px-3 py-2",
+        isFullscreen
+          ? "bg-black/60 backdrop-blur-md border-white/10"
+          : "bg-muted/30 border-border",
+      )}
     >
-      {/* ======================== Device Selector ======================== */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 min-w-[140px] justify-start"
-          >
-            {getDeviceTypeIcon(currentDevice?.type || "desktop")}
-            <span className="text-xs truncate max-w-[100px]">
-              {currentDevice?.name || "Select device"}
-            </span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="w-60 max-h-[400px] overflow-y-auto"
+      {/* Device Selector */}
+      <DeviceSelector
+        device={device}
+        deviceConfig={deviceConfig}
+        phones={phones}
+        tablets={tablets}
+        laptops={laptops}
+        desktops={desktops}
+        onDeviceChange={onDeviceChange}
+      />
+
+      {/* Email Client Selector */}
+      <Select
+        value={emailClient}
+        onValueChange={(value) => onEmailClientChange(value as EmailClient)}
+      >
+        <SelectTrigger
+          className={cn(
+            "w-35 h-9",
+            isFullscreen &&
+              "bg-white/10 border-white/20 text-white hover:bg-white/20",
+          )}
         >
-          {/* Mobile devices */}
-          {groupedDevices.mobile.length > 0 && (
-            <>
-              <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Smartphone className="w-3 h-3" />
-                Phones
-              </DropdownMenuLabel>
-              {groupedDevices.mobile.map((d) => (
-                <DropdownMenuItem
-                  key={d.id}
-                  onClick={() => onDeviceChange(d.id)}
-                  className={
-                    device === d.id ? "bg-accent text-accent-foreground" : ""
-                  }
-                >
-                  <span className="text-xs flex-1">{d.name}</span>
-                  <span className="text-[10px] text-muted-foreground ml-2 tabular-nums">
-                    {d.width}&times;{d.height}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-            </>
-          )}
-
-          {/* Tablet devices */}
-          {groupedDevices.tablet.length > 0 && (
-            <>
-              <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Tablet className="w-3 h-3" />
-                Tablets
-              </DropdownMenuLabel>
-              {groupedDevices.tablet.map((d) => (
-                <DropdownMenuItem
-                  key={d.id}
-                  onClick={() => onDeviceChange(d.id)}
-                  className={
-                    device === d.id ? "bg-accent text-accent-foreground" : ""
-                  }
-                >
-                  <span className="text-xs flex-1">{d.name}</span>
-                  <span className="text-[10px] text-muted-foreground ml-2 tabular-nums">
-                    {d.width}&times;{d.height}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-            </>
-          )}
-
-          {/* Desktop devices */}
-          {groupedDevices.desktop.length > 0 && (
-            <>
-              <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Monitor className="w-3 h-3" />
-                Desktop
-              </DropdownMenuLabel>
-              {groupedDevices.desktop.map((d) => (
-                <DropdownMenuItem
-                  key={d.id}
-                  onClick={() => onDeviceChange(d.id)}
-                  className={
-                    device === d.id ? "bg-accent text-accent-foreground" : ""
-                  }
-                >
-                  <span className="text-xs flex-1">{d.name}</span>
-                  <span className="text-[10px] text-muted-foreground ml-2 tabular-nums">
-                    {d.width}&times;{d.height}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* ======================== Email Client Selector ======================== */}
-      <Select value={emailClient} onValueChange={onEmailClientChange}>
-        <SelectTrigger className="h-8 w-auto min-w-[130px] gap-1.5 text-xs">
-          <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-          <SelectValue>{currentClient?.name || "Select client"}</SelectValue>
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {emailClients.map((client) => (
-            <SelectItem key={client.id} value={client.id}>
-              <span className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">{client.icon}</span>
-                {client.name}
+          {Object.entries(EMAIL_CLIENTS).map(([key, config]) => (
+            <SelectItem key={key} value={key}>
+              <span className="flex items-center gap-2">
+                {config.icon}
+                {config.name}
               </span>
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
 
-      <Separator orientation="vertical" className="h-6" />
+      <Separator
+        orientation="vertical"
+        className={cn(isFullscreen && "bg-white/20")}
+      />
 
-      {/* ======================== Zoom Controls ======================== */}
-      <div className="flex items-center gap-1">
-        <IconButton
-          icon={<ZoomOut className="w-4 h-4" />}
-          tooltip="Zoom out"
-          tooltipSide="bottom"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={handleZoomOut}
-          disabled={zoom <= 25}
-        />
+      {/* Zoom Controls */}
+      <ZoomControls
+        zoom={zoom}
+        localZoom={localZoom}
+        isFullscreen={isFullscreen}
+        onZoomChange={onZoomChange}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+      />
 
-        <div className="w-24 sm:w-28">
-          <Slider
-            value={[localZoom]}
-            min={25}
-            max={200}
-            step={5}
-            onValueChange={onZoomChange}
-            onValueCommit={onZoomCommit}
-            aria-label="Zoom level"
-            className="cursor-pointer [&>span]:h-4 [&>span:first-child]:bg-primary"
-          />
-        </div>
+      {/* Frame Toggle */}
+      <ControlButton
+        icon={
+          showFrame ? (
+            <Eye className="h-4 w-4" />
+          ) : (
+            <EyeOff className="h-4 w-4" />
+          )
+        }
+        tooltip={showFrame ? "Hide Frame" : "Show Frame"}
+        isFullscreen={isFullscreen}
+        onClick={onFrameToggle}
+      />
 
-        <IconButton
-          icon={<ZoomIn className="w-4 h-4" />}
-          tooltip="Zoom in"
-          tooltipSide="bottom"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={handleZoomIn}
-          disabled={zoom >= 200}
-        />
-
-        <span className="text-xs tabular-nums min-w-[42px] text-center text-muted-foreground select-none">
-          {zoom}%
-        </span>
-      </div>
-
-      <Separator orientation="vertical" className="h-6" />
-
-      {/* ======================== Toggle Controls ======================== */}
-      <div className="flex items-center gap-1">
-        {/* Theme Toggle */}
-        <IconButton
+      {/* Orientation Toggle */}
+      {showOrientationToggle && (
+        <ControlButton
           icon={
-            isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />
-          }
-          tooltip={isDark ? "Switch to light theme" : "Switch to dark theme"}
-          tooltipSide="bottom"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onThemeToggle}
-        />
-
-        {/* Frame Toggle */}
-        <div className="flex items-center gap-2 pl-1">
-          <IconButton
-            icon={
-              showFrame ? (
-                <Frame className="w-4 h-4" />
-              ) : (
-                <EyeOff className="w-4 h-4" />
-              )
-            }
-            tooltip={showFrame ? "Hide device frame" : "Show device frame"}
-            tooltipSide="bottom"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onFrameToggle}
-          />
-          <Switch
-            checked={showFrame}
-            onCheckedChange={onFrameToggle}
-            aria-label="Toggle device frame"
-            className="data-[state=checked]:bg-primary"
-          />
-        </div>
-      </div>
-
-      {/* ======================== Spacer ======================== */}
-      <div className="flex-1" />
-
-      {/* ======================== Action Buttons ======================== */}
-      <div className="flex items-center gap-0.5">
-        {/* Copy HTML */}
-        <IconButton
-          icon={<Copy className="w-4 h-4" />}
-          tooltip="Copy HTML to clipboard"
-          tooltipSide="bottom"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onCopy}
-        />
-
-        {/* Download HTML */}
-        <IconButton
-          icon={<Download className="w-4 h-4" />}
-          tooltip="Download HTML file"
-          tooltipSide="bottom"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onDownload}
-        />
-
-        {/* Open in Browser */}
-        <IconButton
-          icon={<ExternalLink className="w-4 h-4" />}
-          tooltip="Open in browser"
-          tooltipSide="bottom"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onOpenInBrowser}
-        />
-
-        <Separator orientation="vertical" className="h-6 mx-1" />
-
-        {/* Fullscreen Toggle */}
-        <IconButton
-          icon={
-            isFullscreen ? (
-              <Minimize className="w-4 h-4" />
+            orientation == "portrait" ? (
+              <Smartphone size={64} />
             ) : (
-              <Maximize className="w-4 h-4" />
+              <Smartphone size={64} style={{ transform: "rotate(90deg)" }} />
             )
           }
-          tooltip={isFullscreen ? "Exit fullscreen" : "Fullscreen preview"}
-          tooltipSide="bottom"
-          variant={isFullscreen ? "secondary" : "ghost"}
-          size="icon"
-          className="h-8 w-8"
-          onClick={onFullscreenToggle}
+          tooltip={orientation === "portrait" ? "Landscape" : "Portrait"}
+          isFullscreen={isFullscreen}
+          onClick={onOrientationToggle}
         />
-      </div>
+      )}
+
+      {/* Theme Toggle */}
+      <ControlButton
+        icon={
+          theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )
+        }
+        tooltip={theme === "dark" ? "Light Mode" : "Dark Mode"}
+        isFullscreen={isFullscreen}
+        onClick={onThemeToggle}
+      />
+
+      {/* Action Buttons */}
+      <ControlButton
+        icon={<Copy className="h-4 w-4" />}
+        tooltip="Copy HTML"
+        isFullscreen={isFullscreen}
+        onClick={onCopy}
+      />
+      <ControlButton
+        icon={<Download className="h-4 w-4" />}
+        tooltip="Download HTML"
+        isFullscreen={isFullscreen}
+        onClick={onDownload}
+      />
+      <ControlButton
+        icon={<ExternalLink className="h-4 w-4" />}
+        tooltip="Open in Browser"
+        isFullscreen={isFullscreen}
+        onClick={onOpenInBrowser}
+      />
+
+      {/* Device Info Badge */}
+      <Badge
+        variant="secondary"
+        className={cn(
+          "text-xs ml-auto",
+          isFullscreen && "bg-white/10 text-white/70 border-white/20",
+        )}
+      >
+        {displayWidth}×{displayHeight} @{deviceConfig.dpi}dpi
+      </Badge>
+
+      {/* Fullscreen Toggle */}
+      <ControlButton
+        icon={
+          isFullscreen ? (
+            <Minimize className="h-4 w-4" />
+          ) : (
+            <Maximize className="h-4 w-4" />
+          )
+        }
+        tooltip={isFullscreen ? "Exit Fullscreen" : "Fullscreen Preview"}
+        isFullscreen={isFullscreen}
+        onClick={onFullscreenToggle}
+      />
     </div>
   );
-};
+}
 
-export default PreviewControls;
+// ============================================================================
+// DEVICE SELECTOR SUB-COMPONENT
+// ============================================================================
+
+interface DeviceSelectorProps {
+  device: DeviceType;
+  deviceConfig: DeviceConfig;
+  phones: [string, DeviceConfig][];
+  tablets: [string, DeviceConfig][];
+  laptops: [string, DeviceConfig][];
+  desktops: [string, DeviceConfig][];
+  onDeviceChange: (device: DeviceType) => void;
+}
+
+function DeviceSelector({
+  device,
+  deviceConfig,
+  phones,
+  tablets,
+  laptops,
+  desktops,
+  onDeviceChange,
+}: DeviceSelectorProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 h-9 min-w-45 justify-between"
+        >
+          {deviceConfig.category === "phone" && (
+            <Smartphone className="h-4 w-4" />
+          )}
+          {deviceConfig.category === "tablet" && <Tablet className="h-4 w-4" />}
+          {(deviceConfig.category === "laptop" ||
+            deviceConfig.category === "desktop") && (
+            <Monitor className="h-4 w-4" />
+          )}
+          <span className="flex-1 text-left">{deviceConfig.name}</span>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-70" align="start">
+        <DeviceGroup
+          label="Phones"
+          devices={phones}
+          selectedDevice={device}
+          icon={<Smartphone className="h-4 w-4" />}
+          onSelect={onDeviceChange}
+        />
+        <DropdownMenuSeparator />
+        <DeviceGroup
+          label="Tablets"
+          devices={tablets}
+          selectedDevice={device}
+          icon={<Tablet className="h-4 w-4" />}
+          onSelect={onDeviceChange}
+        />
+        <DropdownMenuSeparator />
+        <DeviceGroup
+          label="Laptops"
+          devices={laptops}
+          selectedDevice={device}
+          icon={<Laptop className="h-4 w-4" />}
+          onSelect={onDeviceChange}
+        />
+        <DropdownMenuSeparator />
+        <DeviceGroup
+          label="Desktops"
+          devices={desktops}
+          selectedDevice={device}
+          icon={<Monitor className="h-4 w-4" />}
+          onSelect={onDeviceChange}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ============================================================================
+// DEVICE GROUP SUB-COMPONENT
+// ============================================================================
+
+interface DeviceGroupProps {
+  label: string;
+  devices: [string, DeviceConfig][];
+  selectedDevice: string;
+  icon: React.ReactNode;
+  onSelect: (device: DeviceType) => void;
+}
+
+function DeviceGroup({
+  label,
+  devices,
+  selectedDevice,
+  icon,
+  onSelect,
+}: DeviceGroupProps) {
+  return (
+    <>
+      <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
+        {label}
+      </DropdownMenuLabel>
+      {devices.map(([key, config]) => (
+        <DropdownMenuItem
+          key={key}
+          onClick={() => onSelect(key as DeviceType)}
+          className="gap-2"
+        >
+          {icon}
+          <span className="flex-1">{config.name}</span>
+          <span className="text-xs text-muted-foreground">
+            {config.width}×{config.height}
+          </span>
+          {selectedDevice === key && <Check className="h-4 w-4 text-primary" />}
+        </DropdownMenuItem>
+      ))}
+    </>
+  );
+}
+
+// ============================================================================
+// ZOOM CONTROLS SUB-COMPONENT
+// ============================================================================
+
+interface ZoomControlsProps {
+  zoom: number;
+  localZoom: number;
+  isFullscreen: boolean;
+  onZoomChange: (values: number[]) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+}
+
+function ZoomControls({
+  zoom,
+  localZoom,
+  isFullscreen,
+  onZoomChange,
+  onZoomIn,
+  onZoomOut,
+}: ZoomControlsProps) {
+  return (
+    <div className="flex items-center gap-2 mr-2">
+      <ControlButton
+        icon={<ZoomOut className="h-4 w-4" />}
+        tooltip="Zoom Out"
+        isFullscreen={isFullscreen}
+        onClick={onZoomOut}
+        disabled={zoom <= 25}
+      />
+
+      <Slider
+        value={[localZoom]}
+        onValueChange={onZoomChange}
+        min={25}
+        max={200}
+        step={5}
+        className={cn(
+          "w-48",
+          "**:[[role=slider]]:h-4 **:[[role=slider]]:w-4",
+          "**:[[role=slider]]:border-2 **:[[role=slider]]:border-primary",
+          "**:[[role=slider]]:bg-background",
+          "**:data-[orientation=horizontal]:h-2",
+          "**:data-[orientation=horizontal]:bg-primary/20",
+          "**:data-[orientation=horizontal]>span:bg-primary",
+          isFullscreen && [
+            "**:[[role=slider]]:border-white/80 **:[[role=slider]]:bg-white/20",
+            "**:data-[orientation=horizontal]:bg-white/20",
+            "**:data-[orientation=horizontal]>span:bg-white",
+            "**:[[role=slider]]:focus-visible:ring-white/50",
+          ],
+        )}
+      />
+
+      <ControlButton
+        icon={<ZoomIn className="h-4 w-4" />}
+        tooltip="Zoom In"
+        isFullscreen={isFullscreen}
+        onClick={onZoomIn}
+        disabled={zoom >= 200}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// CONTROL BUTTON SUB-COMPONENT
+// ============================================================================
+
+interface ControlButtonProps {
+  icon: React.ReactNode;
+  tooltip: string;
+  isFullscreen: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+function ControlButton({
+  icon,
+  tooltip,
+  isFullscreen,
+  onClick,
+  disabled = false,
+}: ControlButtonProps) {
+  return (
+    <IconButton
+      icon={icon}
+      variant={isFullscreen ? "ghost" : "outline"}
+      className={cn("h-8 w-8", isFullscreen && "text-white hover:bg-white/10")}
+      onClick={onClick}
+      disabled={disabled}
+      tooltip={tooltip}
+    />
+  );
+}

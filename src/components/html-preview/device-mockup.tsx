@@ -1,169 +1,302 @@
+import { useMemo } from "react";
+import { cn } from "@/lib/utils.ts";
+import { EmailClientMockup } from "./email-client-mockup.tsx";
+import { PhoneStatusBar } from "@/components/html-preview/device-elements/phone-status-bar.tsx";
+import { DynamicIsland } from "@/components/html-preview/device-elements/dynamic-island.tsx";
+import { Notch } from "@/components/html-preview/device-elements/notch.tsx";
+import { HomeIndicator } from "@/components/html-preview/device-elements/home-indicator.tsx";
+import { ScreenGlare } from "@/components/html-preview/device-elements/screen-glare.tsx";
+import { DeviceButtons } from "@/components/html-preview/device-elements/device-buttons.tsx";
+import { CameraElement } from "@/components/html-preview/device-elements/camera-element.tsx";
+import type { DeviceConfig, EmailClient, EmailClientConfig, ThemeMode } from "@/types/html-preview.ts";
+import { Email } from "@/types/app.ts";
+
 // ============================================================================
-// html-preview/device-mockup.tsx
-// Device frame wrapper using react-uiframe
+// TYPES
 // ============================================================================
 
-import React, { useMemo } from "react";
-import type { DeviceMockupProps } from "./types";
+interface DeviceMockupProps {
+  deviceConfig: DeviceConfig;
+  clientConfig: EmailClientConfig;
+  htmlContent: string;
+  theme: ThemeMode;
+  emailClient: EmailClient;
+  showFrame: boolean;
+  orientation: "portrait" | "landscape";
+  scale: number;
+  iframeKey: number;
+  className?: string;
+  selectedEmail: Email;
+}
 
-/**
- * DeviceMockup wraps content in a realistic device frame.
- * Uses react-uiframe for device bezels and passes children
- * (the email client UI) into the device screen area.
- */
-const DeviceMockup: React.FC<DeviceMockupProps> = ({
+// ============================================================================
+// DEVICE MOCKUP COMPONENT
+// ============================================================================
+
+export function DeviceMockup({
   deviceConfig,
-  showFrame,
+  clientConfig,
+  htmlContent,
   theme,
-  frameColors,
-  children,
-  className = "",
-  scale = 1,
-}) => {
-  const isDark = theme === "dark";
+  emailClient,
+  showFrame,
+  orientation,
+  scale,
+  iframeKey,
+  className,
+  selectedEmail,
+}: DeviceMockupProps) {
+  // Calculate display dimensions based on orientation
+  const displayWidth = useMemo(
+    () =>
+      orientation === "landscape" ? deviceConfig.height : deviceConfig.width,
+    [deviceConfig, orientation],
+  );
+  const displayHeight = useMemo(
+    () =>
+      orientation === "landscape" ? deviceConfig.width : deviceConfig.height,
+    [deviceConfig, orientation],
+  );
 
-  /**
-   * Compute frame styling based on device type and theme.
-   * Desktop devices get a subtle border, mobile/tablet get bezel styling.
-   */
-  const frameStyle = useMemo(() => {
-    const isMobileOrTablet =
-      deviceConfig.type === "mobile" || deviceConfig.type === "tablet";
+  const bezelSize = deviceConfig.bezelWidth;
 
-    return {
-      borderRadius: deviceConfig.borderRadius
-        ? `${deviceConfig.borderRadius}px`
-        : isMobileOrTablet
-          ? "24px"
-          : "8px",
-      backgroundColor: frameColors?.frame || (isDark ? "#1a1a1a" : "#2d2d2d"),
-      borderColor: frameColors?.screenBorder || "#000000",
-      /** Scale the entire mockup */
-      transform: `scale(${scale})`,
-      transformOrigin: "center center",
-    };
-  }, [deviceConfig, frameColors, isDark, scale]);
+  // Different padding for different device categories
+  const framePadding =
+    deviceConfig.category === "desktop"
+      ? 24
+      : deviceConfig.category === "laptop"
+        ? 16
+        : deviceConfig.category === "tablet"
+          ? 14
+          : 10; // phone
 
-  // If frame is hidden, render children directly
-  if (!showFrame) {
-    return (
-      <div
-        className={`overflow-hidden border ${className}`}
-        style={{
-          width: deviceConfig.width,
-          height: deviceConfig.height,
-          borderRadius: deviceConfig.type === "desktop" ? "0px" : "16px",
-          borderColor: isDark ? "#374151" : "#d1d5db",
-          backgroundColor: isDark ? "#111827" : "#ffffff",
-        }}
-      >
-        {children}
-      </div>
-    );
-  }
+  // Frame dimensions (outer metal band)
+  const frameWidth = showFrame
+    ? displayWidth + bezelSize * 2 + framePadding
+    : displayWidth;
 
-  // Desktop devices get a minimal frame (like a monitor bezel)
-  if (deviceConfig.type === "desktop") {
-    return (
-      <div
-        className={`relative overflow-hidden shadow-2xl ${className}`}
-        style={{
-          width: deviceConfig.width + 24,
-          height: deviceConfig.height + 24,
-          borderRadius: frameStyle.borderRadius,
-          backgroundColor: frameStyle.backgroundColor,
-          border: `2px solid ${frameStyle.borderColor}`,
-          padding: "12px",
-        }}
-      >
-        {/* Inner screen */}
-        <div
-          className="overflow-hidden w-full h-full"
-          style={{
-            borderRadius: deviceConfig.borderRadius
-              ? `${Math.max(0, deviceConfig.borderRadius - 4)}px`
-              : "4px",
-            backgroundColor: isDark ? "#111827" : "#ffffff",
-          }}
-        >
-          {children}
-        </div>
-      </div>
-    );
-  }
+  const frameHeight = showFrame
+    ? displayHeight + bezelSize * 2 + framePadding
+    : displayHeight;
 
-  // Mobile/Tablet devices get a phone/tablet-like frame
-  const paddingTop = deviceConfig.hasDynamicIsland
-    ? 44
-    : deviceConfig.hasNotch
-      ? 36
-      : 24;
-  const paddingBottom = deviceConfig.hasHomeIndicator ? 24 : 12;
+  // Screen glass area positioning
+  const screenAreaTop = framePadding / 2;
+  const screenAreaLeft = framePadding / 2;
+  const screenAreaWidth = displayWidth + bezelSize * 2;
+  const screenAreaHeight = displayHeight + bezelSize * 2;
+
+  // Calculate content top offset based on device features
+  const contentTopOffset =
+    deviceConfig.category === "desktop" || deviceConfig.category === "laptop"
+      ? 0
+      : deviceConfig.hasDynamicIsland
+        ? 54
+        : deviceConfig.hasNotch
+          ? 48
+          : deviceConfig.camera.type === "punch-hole"
+            ? 36
+            : 24;
+
+  // Content dimensions
+  const contentWidth = displayWidth;
+  const contentHeight =
+    deviceConfig.category === "desktop" || deviceConfig.category === "laptop"
+      ? displayHeight
+      : displayHeight - contentTopOffset;
+
+  // Get the status bar background color from email client config
+  const statusBarBg =
+    theme === "dark" ? clientConfig.headerBgDark : clientConfig.headerBg;
+
+  // Apply scale directly to dimensions instead of CSS transform
+  const scaledFrameWidth = frameWidth * scale;
+  const scaledFrameHeight = frameHeight * scale;
 
   return (
     <div
-      className={`relative shadow-2xl ${className}`}
+      className={cn(
+        "relative transition-all duration-300 ease-in-out select-none",
+        showFrame && "shadow-2xl",
+        className,
+      )}
       style={{
-        width: deviceConfig.width + 32,
-        height: deviceConfig.height + paddingTop + paddingBottom + 24,
-        borderRadius: frameStyle.borderRadius,
-        backgroundColor: frameStyle.backgroundColor,
-        border: `2px solid ${frameStyle.borderColor}`,
-        padding: "12px",
-        paddingTop: `${paddingTop + 12}px`,
-        paddingBottom: `${paddingBottom + 12}px`,
+        width: `${scaledFrameWidth}px`,
+        height: `${scaledFrameHeight}px`,
       }}
     >
-      {/* Dynamic Island */}
-      {deviceConfig.hasDynamicIsland && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 bg-black rounded-full z-10"
-          style={{
-            top: "12px",
-            width: "120px",
-            height: "28px",
-          }}
-        />
-      )}
-
-      {/* Notch */}
-      {deviceConfig.hasNotch && !deviceConfig.hasDynamicIsland && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 bg-black rounded-b-2xl z-10"
-          style={{
-            top: "0px",
-            width: "140px",
-            height: "28px",
-          }}
-        />
-      )}
-
-      {/* Inner screen */}
       <div
-        className="overflow-hidden w-full h-full"
+        className="absolute inset-0"
         style={{
-          borderRadius: deviceConfig.borderRadius
-            ? `${Math.max(0, deviceConfig.borderRadius - 8)}px`
-            : "16px",
-          backgroundColor: isDark ? "#111827" : "#ffffff",
+          background: showFrame ? deviceConfig.frameGradient : "transparent",
+          borderRadius: showFrame
+            ? `${deviceConfig.borderRadius * scale}px`
+            : "0px",
+          boxShadow: showFrame
+            ? `0 0 0 1px ${deviceConfig.frameBorderColor}, 
+               0 ${25 * scale}px ${50 * scale}px -12px rgba(0, 0, 0, 0.5),
+               inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+            : "none",
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+          width: `${frameWidth}px`,
+          height: `${frameHeight}px`,
         }}
       >
-        {children}
-      </div>
+        {/* Inner frame highlight for depth */}
+        {showFrame && deviceConfig.category !== "desktop" && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              borderRadius: `${deviceConfig.borderRadius}px`,
+              background: `linear-gradient(135deg, 
+                rgba(255,255,255,0.15) 0%, 
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 100%)`,
+              zIndex: 1,
+            }}
+          />
+        )}
 
-      {/* Home Indicator */}
-      {deviceConfig.hasHomeIndicator && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 bg-gray-400 dark:bg-gray-500 rounded-full z-10"
-          style={{
-            bottom: "6px",
-            width: "100px",
-            height: "4px",
-          }}
-        />
-      )}
+        {/* Physical Buttons */}
+        {showFrame && deviceConfig.buttons.length > 0 && (
+          <DeviceButtons
+            buttons={deviceConfig.buttons}
+            frameHeight={frameHeight}
+            frameWidth={frameWidth}
+            borderRadius={deviceConfig.borderRadius}
+            frameColor={deviceConfig.frameColor}
+          />
+        )}
+
+        {/* Screen Glass Area (black glass with bezel) */}
+        {showFrame && (
+          <div
+            className="absolute overflow-hidden"
+            style={{
+              top: `${screenAreaTop}px`,
+              left: `${screenAreaLeft}px`,
+              width: `${screenAreaWidth}px`,
+              height: `${screenAreaHeight}px`,
+              borderRadius: `${deviceConfig.screenBorderRadius}px`,
+              background: deviceConfig.bezelColor,
+              boxShadow: "inset 0 0 1px rgba(255,255,255,0.1)",
+            }}
+          >
+            {/* Dynamic Island - sits in the glass, status bar wraps around it */}
+            {deviceConfig.hasDynamicIsland && (
+              <>
+                <DynamicIsland />
+                <div
+                  className="absolute left-0 right-0 z-20"
+                  style={{
+                    top: "8px",
+                    height: "35px",
+                  }}
+                >
+                  <PhoneStatusBar
+                    backgroundColor="transparent"
+                    hasDynamicIsland={true}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Notch - sits at top, status bar wraps around it */}
+            {deviceConfig.hasNotch && deviceConfig.category !== "laptop" && (
+              <>
+                <Notch />
+                <div
+                  className="absolute left-0 right-0 z-20"
+                  style={{
+                    top: 0,
+                    height: "33px",
+                  }}
+                >
+                  <PhoneStatusBar
+                    backgroundColor="transparent"
+                    hasNotch={true}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Laptop notch */}
+            {deviceConfig.hasNotch && deviceConfig.category === "laptop" && (
+              <Notch />
+            )}
+
+            {/* Camera punch-hole - camera on top (z-30), status bar below (z-20) */}
+            {deviceConfig.camera.type === "punch-hole" && (
+              <>
+                <div
+                  className="absolute z-20"
+                  style={{
+                    top: "8px",
+                    height: "28px",
+                    left: 0,
+                    right: 0,
+                  }}
+                >
+                  <PhoneStatusBar
+                    backgroundColor={statusBarBg}
+                    hasPunchHole={true}
+                  />
+                </div>
+                <CameraElement config={deviceConfig.camera} />
+              </>
+            )}
+
+            {/* Status bar for devices without notch/island/punch-hole */}
+            {!deviceConfig.hasDynamicIsland &&
+              !deviceConfig.hasNotch &&
+              deviceConfig.camera.type !== "punch-hole" &&
+              deviceConfig.category === "phone" && (
+                <div
+                  className="absolute left-0 right-0 z-20"
+                  style={{
+                    top: "8px",
+                    height: "24px",
+                  }}
+                >
+                  <PhoneStatusBar backgroundColor={statusBarBg} />
+                </div>
+              )}
+
+            {/* Content Area */}
+            <div
+              className="absolute overflow-hidden"
+              style={{
+                top: `${bezelSize + contentTopOffset}px`,
+                left: `${bezelSize}px`,
+                width: `${contentWidth}px`,
+                height: `${contentHeight}px`,
+              }}
+            >
+              <EmailClientMockup
+                clientConfig={clientConfig}
+                htmlContent={htmlContent}
+                theme={theme}
+                emailClient={emailClient}
+                iframeKey={iframeKey}
+                selectedEmail={selectedEmail}
+              />
+
+              {/* Screen Glare Effect */}
+              {deviceConfig.screenGlare.enabled && (
+                <ScreenGlare
+                  intensity={deviceConfig.screenGlare.intensity}
+                  angle={deviceConfig.screenGlare.angle}
+                />
+              )}
+            </div>
+
+            {/* Home Indicator - floats on top of content with no extra space */}
+            {deviceConfig.hasHomeBar && (
+              <HomeIndicator deviceConfig={deviceConfig} />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
-};
-
-export default DeviceMockup;
+}
