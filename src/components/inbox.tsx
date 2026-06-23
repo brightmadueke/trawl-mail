@@ -1,4 +1,4 @@
-// src/components/inbox.tsx - With Tauri plugin for printing
+// src/components/inbox.tsx - Complete with attachment handling
 
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group.tsx";
 import {
@@ -51,8 +51,9 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { copyFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { join, tempDir } from "@tauri-apps/api/path";
+import { save } from "@tauri-apps/plugin-dialog";
 
 // ==================== Filter Configuration ====================
 type FilterType = "all" | "unread" | "read" | "has_attachments" | "has_html";
@@ -145,19 +146,6 @@ function generateHeadersHtml(email: Email): string {
     .join("");
 
   return `<table>${tableRows}</table>`;
-}
-
-function generateAttachmentsHtml(email: Email): string {
-  if (!email.attachments?.length) return "<p>No attachments</p>";
-
-  const items = email.attachments
-    .map(
-      (a) =>
-        `<li>${a.filename} (${a.content_type || "Unknown type"}, ${formatFileSize(a.size)})</li>`,
-    )
-    .join("");
-
-  return `<ul>${items}</ul>`;
 }
 
 function formatFileSize(bytes: number): string {
@@ -890,125 +878,34 @@ function DisplayPane() {
     }
   }, [selectedEmail, deleteEmail]);
 
-  const handleCopy = useCallback(async () => {
-    if (!selectedEmail) return;
-
-    let content: string;
-    switch (activeTab) {
-      case "text":
-        content = selectedEmail.text || "";
-        break;
-      case "html":
-        content = selectedEmail.html || "";
-        break;
-      case "raw-content":
-        content = selectedEmail.raw_content || "";
-        break;
-      case "headers":
-        content = formatHeadersText(selectedEmail);
-        break;
-      case "attachments":
-        content =
-          selectedEmail.attachments?.map((a) => a.filename).join(", ") ||
-          "No attachments";
-        break;
-      default:
-        content = selectedEmail.text || "";
-    }
-
+  const copyContent = useCallback(async (content: string, label: string) => {
     if (content.trim()) {
       await navigator.clipboard.writeText(content);
-      toast.success(
-        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} content copied to clipboard`,
-      );
+      toast.success(`${label} copied to clipboard`);
     } else {
-      toast.error("No content to copy");
+      toast.error(`No ${label.toLowerCase()} to copy`);
     }
-  }, [selectedEmail, activeTab]);
+  }, []);
 
-  const handleDownload = useCallback(() => {
-    if (!selectedEmail) return;
+  const downloadContent = useCallback(
+    (content: string, filename: string, mimeType = "text/plain") => {
+      if (content.trim()) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`${filename} downloaded`);
+      } else {
+        toast.error("No content to download");
+      }
+    },
+    [],
+  );
 
-    let content: string;
-    let filename: string;
-    let mimeType = "text/plain";
-
-    switch (activeTab) {
-      case "text":
-        content = selectedEmail.text || "";
-        filename = `${selectedEmail.subject || "email"}-text.txt`;
-        break;
-      case "html":
-        content = selectedEmail.html || "";
-        filename = `${selectedEmail.subject || "email"}.html`;
-        mimeType = "text/html";
-        break;
-      case "raw-content":
-        content = selectedEmail.raw_content || "";
-        filename = `${selectedEmail.subject || "email"}-raw.txt`;
-        break;
-      case "headers":
-        content = formatHeadersText(selectedEmail);
-        filename = `${selectedEmail.subject || "email"}-headers.txt`;
-        break;
-      case "attachments":
-        content =
-          selectedEmail.attachments
-            ?.map(
-              (a) =>
-                `${a.filename} (${a.content_type || "Unknown type"}, ${formatFileSize(a.size)})`,
-            )
-            .join("\n") || "No attachments";
-        filename = `${selectedEmail.subject || "email"}-attachments.txt`;
-        break;
-      default:
-        content = selectedEmail.text || "";
-        filename = `${selectedEmail.subject || "email"}.txt`;
-    }
-
-    if (content.trim()) {
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(
-        `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} content downloaded`,
-      );
-    } else {
-      toast.error("No content to download");
-    }
-  }, [selectedEmail, activeTab]);
-
-  // Print using Tauri plugin
-  const handlePrint = useCallback(async () => {
-    if (!selectedEmail) return;
-
-    let content: string;
-    const title = selectedEmail.subject || "Email";
-
-    switch (activeTab) {
-      case "text":
-        content = `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(selectedEmail.text || "")}</pre>`;
-        break;
-      case "html":
-        content = selectedEmail.html || "";
-        break;
-      case "raw-content":
-        content = `<pre style="white-space: pre-wrap; font-family: monospace;">${escapeHtml(selectedEmail.raw_content || "")}</pre>`;
-        break;
-      case "headers":
-        content = generateHeadersHtml(selectedEmail);
-        break;
-      case "attachments":
-        content = generateAttachmentsHtml(selectedEmail);
-        break;
-      default:
-        content = `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(selectedEmail.text || "")}</pre>`;
-    }
-
+  const printContent = useCallback(async (content: string, title: string) => {
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -1018,31 +915,25 @@ function DisplayPane() {
       table { border-collapse: collapse; width: 100%; }
       th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
       th { background-color: #f2f2f2; }
-      @media print {
-        body { padding: 0; }
-      }
+      pre { white-space: pre-wrap; font-family: inherit; }
+      @media print { body { padding: 0; } }
     </style>
   </head>
   <body>${content}</body>
 </html>`;
 
     try {
-      // Write the HTML content to a temporary file
       const tempDirPath = await tempDir();
-      const fileName = `print-email-${Date.now()}.html`;
+      const fileName = `print-${Date.now()}.html`;
       const filePath = await join(tempDirPath, fileName);
 
       await writeTextFile(filePath, htmlContent);
 
-      // Dynamically import open from shell plugin
       const { open } = await import("@tauri-apps/plugin-shell");
-
-      // Open the file in the default browser
       await open(`file://${filePath}`);
 
       toast.success("Print file opened in browser. Use Ctrl/Cmd+P to print.");
 
-      // Clean up temp file after a delay
       setTimeout(async () => {
         try {
           const { remove } = await import("@tauri-apps/plugin-fs");
@@ -1050,12 +941,221 @@ function DisplayPane() {
         } catch {
           // Ignore cleanup errors
         }
-      }, 30000); // Clean up after 30 seconds
+      }, 30000);
     } catch (err) {
       console.error("Print error:", err);
       toast.error("Failed to open print. Please try again.");
     }
-  }, [selectedEmail, activeTab]);
+  }, []);
+
+  const getCopyOptions = useCallback((): {
+    label: string;
+    content: string;
+    icon: React.ReactNode;
+  }[] => {
+    if (!selectedEmail) return [];
+
+    const options: { label: string; content: string; icon: React.ReactNode }[] =
+      [];
+
+    if (selectedEmail.subject) {
+      options.push({
+        label: "Subject",
+        content: selectedEmail.subject,
+        icon: <Mail className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.from) {
+      options.push({
+        label: "Sender Email",
+        content: selectedEmail.from,
+        icon: <User2 className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.sender_name) {
+      options.push({
+        label: "Sender Name",
+        content: selectedEmail.sender_name,
+        icon: <User2 className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.text) {
+      options.push({
+        label: "Text Content",
+        content: selectedEmail.text,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.html) {
+      options.push({
+        label: "HTML Content",
+        content: selectedEmail.html,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.raw_content) {
+      options.push({
+        label: "Raw Content",
+        content: selectedEmail.raw_content,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    options.push({
+      label: "All Headers",
+      content: formatHeadersText(selectedEmail),
+      icon: <File className="size-3.5" />,
+    });
+
+    if (selectedEmail.id) {
+      options.push({
+        label: "Message ID",
+        content: selectedEmail.id,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    return options;
+  }, [selectedEmail]);
+
+  const getDownloadOptions = useCallback((): {
+    label: string;
+    content: string;
+    filename: string;
+    mimeType?: string;
+    icon: React.ReactNode;
+  }[] => {
+    if (!selectedEmail) return [];
+
+    const options: {
+      label: string;
+      content: string;
+      filename: string;
+      mimeType?: string;
+      icon: React.ReactNode;
+    }[] = [];
+
+    if (selectedEmail.text) {
+      options.push({
+        label: "Text Content (.txt)",
+        content: selectedEmail.text,
+        filename: `${selectedEmail.subject || "email"}-text.txt`,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.html) {
+      options.push({
+        label: "HTML Content (.html)",
+        content: selectedEmail.html,
+        filename: `${selectedEmail.subject || "email"}.html`,
+        mimeType: "text/html",
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.raw_content) {
+      options.push({
+        label: "Raw Content (.txt)",
+        content: selectedEmail.raw_content,
+        filename: `${selectedEmail.subject || "email"}-raw.txt`,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    options.push({
+      label: "Headers (.txt)",
+      content: formatHeadersText(selectedEmail),
+      filename: `${selectedEmail.subject || "email"}-headers.txt`,
+      icon: <File className="size-3.5" />,
+    });
+
+    options.push({
+      label: "Full Email (.json)",
+      content: JSON.stringify(selectedEmail, null, 2),
+      filename: `${selectedEmail.subject || "email"}.json`,
+      mimeType: "application/json",
+      icon: <File className="size-3.5" />,
+    });
+
+    return options;
+  }, [selectedEmail]);
+
+  const getPrintOptions = useCallback((): {
+    label: string;
+    content: string;
+    title: string;
+    icon: React.ReactNode;
+  }[] => {
+    if (!selectedEmail) return [];
+
+    const options: {
+      label: string;
+      content: string;
+      title: string;
+      icon: React.ReactNode;
+    }[] = [];
+
+    if (selectedEmail.text) {
+      options.push({
+        label: "Text Content",
+        content: `<pre>${escapeHtml(selectedEmail.text)}</pre>`,
+        title: `${selectedEmail.subject || "Email"} - Text`,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.html) {
+      options.push({
+        label: "HTML Content",
+        content: selectedEmail.html,
+        title: `${selectedEmail.subject || "Email"} - HTML`,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    if (selectedEmail.raw_content) {
+      options.push({
+        label: "Raw Content",
+        content: `<pre style="font-family: monospace;">${escapeHtml(selectedEmail.raw_content)}</pre>`,
+        title: `${selectedEmail.subject || "Email"} - Raw`,
+        icon: <File className="size-3.5" />,
+      });
+    }
+
+    options.push({
+      label: "Headers",
+      content: generateHeadersHtml(selectedEmail),
+      title: `${selectedEmail.subject || "Email"} - Headers`,
+      icon: <File className="size-3.5" />,
+    });
+
+    const fullContent = `
+      <h2>${escapeHtml(selectedEmail.subject || "No Subject")}</h2>
+      <p><strong>From:</strong> ${escapeHtml(selectedEmail.sender_name || "")} &lt;${escapeHtml(selectedEmail.from || "")}&gt;</p>
+      <p><strong>To:</strong> ${escapeHtml(selectedEmail.to?.join(", ") || "")}</p>
+      ${selectedEmail.cc?.length ? `<p><strong>CC:</strong> ${escapeHtml(selectedEmail.cc.join(", "))}</p>` : ""}
+      <p><strong>Date:</strong> ${new Date(selectedEmail.date).toUTCString()}</p>
+      <hr>
+      <h3>Text Content</h3>
+      <pre>${escapeHtml(selectedEmail.text || "No text content")}</pre>
+      ${selectedEmail.html ? `<h3>HTML Content</h3>${selectedEmail.html}` : ""}
+    `;
+
+    options.push({
+      label: "Full Email",
+      content: fullContent,
+      title: `${selectedEmail.subject || "Email"} - Full`,
+      icon: <File className="size-3.5" />,
+    });
+
+    return options;
+  }, [selectedEmail]);
 
   const handleToggleRead = useCallback(async () => {
     if (selectedEmail) {
@@ -1068,45 +1168,6 @@ function DisplayPane() {
       }
     }
   }, [selectedEmail, markAsRead, markAsUnread]);
-
-  const actionButtons = useMemo(
-    () => [
-      {
-        icon: selectedEmail?.is_read ? <MailMinus /> : <MailOpen />,
-        tooltip: selectedEmail?.is_read ? "Mark as unread" : "Mark as read",
-        onClick: handleToggleRead,
-      },
-      {
-        icon: <Copy />,
-        tooltip: `Copy ${activeTab} content`,
-        onClick: handleCopy,
-      },
-      {
-        icon: <Download />,
-        tooltip: `Download ${activeTab} content`,
-        onClick: handleDownload,
-      },
-      {
-        icon: <Printer />,
-        tooltip: `Print ${activeTab} content`,
-        onClick: handlePrint,
-      },
-      {
-        icon: <Trash2 />,
-        tooltip: "Delete",
-        onClick: () => setShowDeleteDialog(true),
-        className: "text-destructive hover:text-destructive",
-      },
-    ],
-    [
-      selectedEmail,
-      activeTab,
-      handleToggleRead,
-      handleCopy,
-      handleDownload,
-      handlePrint,
-    ],
-  );
 
   if (!selectedEmail) {
     return (
@@ -1123,6 +1184,10 @@ function DisplayPane() {
     );
   }
 
+  const copyOptions = getCopyOptions();
+  const downloadOptions = getDownloadOptions();
+  const printOptions = getPrintOptions();
+
   return (
     <div className="w-3/4 flex flex-col rounded-xl bg-background/85 overflow-hidden">
       <div className="p-4 flex gap-3 border-b shrink-0 items-center">
@@ -1134,16 +1199,109 @@ function DisplayPane() {
           tooltip="Back to list"
         />
 
-        {actionButtons.map((action, index) => (
-          <IconButton
-            key={index}
-            icon={action.icon}
-            variant="ghost"
-            tooltip={action.tooltip}
-            onClick={action.onClick}
-            className={action.className}
-          />
-        ))}
+        <IconButton
+          icon={selectedEmail.is_read ? <MailMinus /> : <MailOpen />}
+          variant="ghost"
+          tooltip={selectedEmail.is_read ? "Mark as unread" : "Mark as read"}
+          onClick={handleToggleRead}
+        />
+
+        {/* Copy Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div>
+              <IconButton
+                icon={<Copy />}
+                variant="ghost"
+                tooltip="Copy content"
+              />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-48">
+            {copyOptions.map((option, index) => (
+              <DropdownMenuItem
+                key={index}
+                onClick={() => copyContent(option.content, option.label)}
+              >
+                {option.icon}
+                <span className="ml-2">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+            {copyOptions.length === 0 && (
+              <DropdownMenuItem disabled>No content to copy</DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Download Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div>
+              <IconButton
+                icon={<Download />}
+                variant="ghost"
+                tooltip="Download content"
+              />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56">
+            {downloadOptions.map((option, index) => (
+              <DropdownMenuItem
+                key={index}
+                onClick={() =>
+                  downloadContent(
+                    option.content,
+                    option.filename,
+                    option.mimeType,
+                  )
+                }
+              >
+                {option.icon}
+                <span className="ml-2">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+            {downloadOptions.length === 0 && (
+              <DropdownMenuItem disabled>
+                No content to download
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Print Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div>
+              <IconButton
+                icon={<Printer />}
+                variant="ghost"
+                tooltip="Print content"
+              />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-48">
+            {printOptions.map((option, index) => (
+              <DropdownMenuItem
+                key={index}
+                onClick={() => printContent(option.content, option.title)}
+              >
+                {option.icon}
+                <span className="ml-2">{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+            {printOptions.length === 0 && (
+              <DropdownMenuItem disabled>No content to print</DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <IconButton
+          icon={<Trash2 />}
+          variant="ghost"
+          tooltip="Delete"
+          onClick={() => setShowDeleteDialog(true)}
+          className="text-destructive hover:text-destructive"
+        />
       </div>
 
       <div className="flex gap-3 p-6 shrink-0">
@@ -1394,18 +1552,122 @@ function DisplayPane() {
 
 // ==================== Attachment component ====================
 function Attachment({ attachment }: { attachment: AttachmentType }) {
+  const handleOpenAttachment = useCallback(async () => {
+    if (!attachment.path) {
+      toast.error("No file path available for this attachment");
+      return;
+    }
+
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(attachment.path);
+    } catch (err) {
+      console.error("Failed to open attachment:", err);
+
+      try {
+        const { open } = await import("@tauri-apps/plugin-shell");
+        const fileUrl = attachment.path.startsWith("file://")
+          ? attachment.path
+          : `file://${attachment.path}`;
+        await open(fileUrl);
+      } catch (fallbackErr) {
+        console.error("Fallback also failed:", fallbackErr);
+        toast.error("Failed to open attachment");
+      }
+    }
+  }, [attachment.path]);
+
+  const handleSaveAttachment = useCallback(async () => {
+    if (!attachment.path) {
+      toast.error("No file path available for this attachment");
+      return;
+    }
+
+    try {
+      const filePath = await save({
+        defaultPath: attachment.filename || "attachment",
+        filters: [
+          {
+            name: attachment.content_type || "All Files",
+            extensions: [attachment.filename?.split(".").pop() || "*"],
+          },
+        ],
+      });
+
+      if (filePath) {
+        await copyFile(attachment.path, filePath);
+        toast.success(`Attachment saved successfully`);
+      }
+    } catch (err) {
+      console.error("Failed to save attachment:", err);
+
+      try {
+        const a = document.createElement("a");
+        a.href = attachment.path.startsWith("file://")
+          ? attachment.path
+          : `file://${attachment.path}`;
+        a.download = attachment.filename || "attachment";
+        a.click();
+        toast.success(`Downloading ${attachment.filename || "attachment"}`);
+      } catch (fallbackErr) {
+        console.error("Fallback download failed:", fallbackErr);
+        toast.error("Failed to save attachment");
+      }
+    }
+  }, [attachment.path, attachment.filename]);
+
   return (
     <div className="flex flex-col w-60 rounded-lg border overflow-hidden bg-card hover:bg-accent/50 transition-colors cursor-pointer group">
-      <div className="h-40 w-full bg-muted/30 flex items-center justify-center">
-        {attachment.content_type?.startsWith("image/") ? (
+      <div
+        className="h-40 w-full bg-muted/30 flex items-center justify-center relative"
+        onClick={handleOpenAttachment}
+      >
+        {attachment.content_type?.startsWith("image/") && attachment.path ? (
           <img
-            src={attachment.path || "/placeholder-image.svg"}
+            src={
+              attachment.path.startsWith("file://")
+                ? attachment.path
+                : `file://${attachment.path}`
+            }
             alt={attachment.filename}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = "none";
+            }}
           />
-        ) : (
+        ) : null}
+        {(!attachment.content_type?.startsWith("image/") ||
+          !attachment.path) && (
           <File className="size-12 text-muted-foreground/50" />
         )}
+
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenAttachment();
+            }}
+          >
+            <File className="size-3.5 mr-1" />
+            Open
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSaveAttachment();
+            }}
+          >
+            <Download className="size-3.5 mr-1" />
+            Save
+          </Button>
+        </div>
       </div>
 
       <div className="p-3 flex flex-col gap-1 border-t">
