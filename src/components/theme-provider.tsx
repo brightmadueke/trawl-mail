@@ -1,3 +1,5 @@
+// src/components/theme-provider.tsx
+
 import * as React from "react";
 
 export type Theme = "dark" | "light" | "system";
@@ -22,13 +24,15 @@ export function ThemeProvider({
   defaultTheme = "system",
   storageKey = "ui-theme",
 }: ThemeProviderProps) {
-  const [theme, setTheme] = React.useState<Theme>(
-    () =>
-      (typeof window !== "undefined"
-        ? (localStorage.getItem(storageKey) as Theme)
-        : defaultTheme) || defaultTheme,
-  );
+  const [theme, setTheme] = React.useState<Theme>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(storageKey) as Theme | null;
+      if (stored) return stored;
+    }
+    return defaultTheme;
+  });
 
+  // Apply theme class to document
   React.useEffect(() => {
     const root = window.document.documentElement;
 
@@ -47,13 +51,37 @@ export function ThemeProvider({
     root.classList.add(theme);
   }, [theme]);
 
-  const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+  // Listen for system theme changes when in system mode
+  React.useEffect(() => {
+    if (theme !== "system") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const handleChange = () => {
+      const root = window.document.documentElement;
+      root.classList.remove("light", "dark");
+      root.classList.add(mediaQuery.matches ? "dark" : "light");
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [theme]);
+
+  const handleSetTheme = React.useCallback(
+    (newTheme: Theme) => {
+      localStorage.setItem(storageKey, newTheme);
+      setTheme(newTheme);
     },
-  };
+    [storageKey],
+  );
+
+  const value = React.useMemo(
+    () => ({
+      theme,
+      setTheme: handleSetTheme,
+    }),
+    [theme, handleSetTheme],
+  );
 
   return (
     <ThemeProviderContext.Provider value={value}>

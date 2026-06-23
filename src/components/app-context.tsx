@@ -45,7 +45,7 @@ const DEV_DEFAULT_EMAILS: Email[] = [
     subject: "Welcome to the Development Environment",
     html: "<p>This is a test email for development purposes.</p>",
     text: "This is a test email for development purposes.",
-    date: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+    date: new Date(Date.now() - 3600000).toISOString(),
     is_read: false,
   },
   {
@@ -57,7 +57,7 @@ const DEV_DEFAULT_EMAILS: Email[] = [
     subject: "Project Update - Q3 Milestones",
     html: "<p>Here's the latest update on our Q3 milestones.</p><p>We're making great progress!</p>",
     text: "Here's the latest update on our Q3 milestones.\nWe're making great progress!",
-    date: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+    date: new Date(Date.now() - 7200000).toISOString(),
     is_read: false,
     cc: ["manager@startup.io"],
   },
@@ -70,7 +70,7 @@ const DEV_DEFAULT_EMAILS: Email[] = [
     subject: "[repo-name] Pull request #42: Feature branch merged",
     html: "<p>Pull request #42 has been merged into main.</p><p><strong>Feature: Add new authentication system</strong></p>",
     text: "Pull request #42 has been merged into main.\nFeature: Add new authentication system",
-    date: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+    date: new Date(Date.now() - 86400000).toISOString(),
     is_read: true,
     attachments: [
       {
@@ -89,7 +89,7 @@ const DEV_DEFAULT_EMAILS: Email[] = [
     subject: "You have 5 new mentions in #general",
     html: "<p>You were mentioned by @alex, @sarah, and 3 others in #general.</p>",
     text: "You were mentioned by @alex, @sarah, and 3 others in #general.",
-    date: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
+    date: new Date(Date.now() - 10800000).toISOString(),
     is_read: false,
   },
   {
@@ -101,7 +101,7 @@ const DEV_DEFAULT_EMAILS: Email[] = [
     subject: "This Week in Tech: AI Breakthroughs and Web Development Trends",
     html: "<h1>This Week in Tech</h1><p>Top stories this week:</p><ul><li>New AI model achieves breakthrough</li><li>React 19 announced</li><li>WebAssembly gains traction</li></ul>",
     text: "This Week in Tech\nTop stories this week:\n- New AI model achieves breakthrough\n- React 19 announced\n- WebAssembly gains traction",
-    date: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+    date: new Date(Date.now() - 172800000).toISOString(),
     is_read: true,
   },
 ];
@@ -125,8 +125,6 @@ function formatError(err: unknown): string {
 }
 
 function isDevMode(): boolean {
-  // Check if we're in development mode
-  // This works with both Vite and CRA
   return import.meta.env.DEV || process.env.NODE_ENV === "development";
 }
 
@@ -156,15 +154,14 @@ interface AppContextType {
   clearLogs: () => Promise<void>;
   toggleLogsPause: () => void;
   refreshAll: () => Promise<void>;
-  // Email management methods
   deleteEmail: (emailId: string) => Promise<void>;
   clearAllEmails: () => Promise<void>;
   deleteSelectedEmail: () => Promise<void>;
-  // Settings methods
   settings: AppSettings;
   saveSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
   loadSettings: () => Promise<AppSettings>;
   isSettingsLoading: boolean;
+  isSavingSettings: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -181,7 +178,6 @@ interface AppProviderProps {
   children: React.ReactNode;
 }
 
-// Store instance reference
 let storeInstance: Store | null = null;
 
 async function getStore(): Promise<Store> {
@@ -216,7 +212,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isServerRestarting, setIsServerRestarting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Initialize emails with dev defaults if in dev mode
   const [emails, setEmails] = useState<Email[]>(() => {
     if (isDevMode()) {
       return DEV_DEFAULT_EMAILS;
@@ -228,7 +223,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isEmailsLoading, setIsEmailsLoading] = useState(false);
   const [emailsError, setEmailsError] = useState<string | null>(null);
 
-  // Initialize unread count based on dev emails
   const [unreadCount, setUnreadCount] = useState(() => {
     if (isDevMode()) {
       return DEV_DEFAULT_EMAILS.filter((email) => !email.is_read).length;
@@ -241,7 +235,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isLogsPaused, setIsLogsPaused] = useState(false);
   const [logsError, setLogsError] = useState<string | null>(null);
 
-  // Settings state with all defaults
   const [settings, setSettings] = useState<AppSettings>({
     notificationsEnabled: true,
     soundAlerts: true,
@@ -253,13 +246,13 @@ export function AppProvider({ children }: AppProviderProps) {
     autoRefresh: true,
   });
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const isLogsPausedRef = useRef(false);
   const isServerRunningRef = useRef(false);
   const isInitialLogsLoadRef = useRef(true);
   const logsClearedAtRef = useRef<string | null>(null);
 
-  // Refs for functions that might be called before they're defined
   const selectEmailRef = useRef<(email: Email | null) => Promise<void>>(
     async () => {},
   );
@@ -310,24 +303,23 @@ export function AppProvider({ children }: AppProviderProps) {
   const saveSettings = useCallback(
     async (newSettings: Partial<AppSettings>) => {
       try {
-        setIsSettingsLoading(true);
+        setIsSavingSettings(true);
         const store = await getStore();
 
-        // Merge with existing settings
         const updatedSettings = { ...settings, ...newSettings };
 
-        // Save the entire settings object
         await store.set("all_settings", updatedSettings);
-
-        // Update local state
         setSettings(updatedSettings);
 
-        console.log("Settings saved successfully");
+        // Sync theme to localStorage
+        if (updatedSettings.theme) {
+          localStorage.setItem("ui-theme", updatedSettings.theme);
+        }
       } catch (err) {
         console.error("Failed to save settings:", formatError(err));
         throw err;
       } finally {
-        setIsSettingsLoading(false);
+        setIsSavingSettings(false);
       }
     },
     [settings],
@@ -338,15 +330,17 @@ export function AppProvider({ children }: AppProviderProps) {
       setIsSettingsLoading(true);
       const store = await getStore();
 
-      // Try to load the complete settings object
       const savedSettings = await store.get<AppSettings>("all_settings");
 
       if (savedSettings) {
         setSettings(savedSettings);
+        // Sync theme to localStorage
+        if (savedSettings.theme) {
+          localStorage.setItem("ui-theme", savedSettings.theme);
+        }
         return savedSettings;
       }
 
-      // Fallback: return default settings
       const defaultSettings: AppSettings = {
         notificationsEnabled: true,
         soundAlerts: true,
@@ -361,7 +355,6 @@ export function AppProvider({ children }: AppProviderProps) {
       return defaultSettings;
     } catch (err) {
       console.error("Failed to load settings:", formatError(err));
-      // Return default settings on error
       const defaultSettings: AppSettings = {
         notificationsEnabled: true,
         soundAlerts: true,
@@ -381,13 +374,11 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // ==================== Core Functions ====================
 
-  // Define selectEmail first
   const selectEmail = useCallback(
     async (email: Email | null) => {
       setSelectedEmail(email);
       if (email && !email.is_read) {
         try {
-          // In dev mode without a backend, just update the state locally
           if (isDevMode() && !serverStatus.is_running) {
             setEmails((prev) =>
               prev.map((e) =>
@@ -405,7 +396,6 @@ export function AppProvider({ children }: AppProviderProps) {
           setUnreadCount((prev) => Math.max(0, prev - 1));
         } catch (err) {
           console.error("Failed to mark email as read:", formatError(err));
-          // In dev mode, still update the state even if the backend call fails
           if (isDevMode()) {
             setEmails((prev) =>
               prev.map((e) =>
@@ -420,32 +410,25 @@ export function AppProvider({ children }: AppProviderProps) {
     [serverStatus.is_running],
   );
 
-  // Update selectEmailRef when selectEmail changes
   useEffect(() => {
     selectEmailRef.current = selectEmail;
   }, [selectEmail]);
 
-  // Define showNewEmailNotification after selectEmail
   const showNewEmailNotification = useCallback(
     async (email: Email) => {
-      // Check if notifications are enabled in settings
       if (!settings.notificationsEnabled) {
         return;
       }
 
-      // Check sound alerts
       if (settings.soundAlerts) {
-        // You can add sound playback logic here
+        // Sound playback logic here
       }
 
       const body = email.text
         ? email.text.substring(0, 150) + (email.text.length > 150 ? "..." : "")
         : "New email received";
 
-      // Check desktop notifications
       if (!settings.desktopNotifications) {
-        // Only show toast, skip system notification
-
         toast(`${email.subject || "New Email"}`, {
           description: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
           action: {
@@ -458,8 +441,6 @@ export function AppProvider({ children }: AppProviderProps) {
         return;
       }
 
-      // 1. Show sonner toast with action button
-
       toast(`${email.subject || "New Email"}`, {
         description: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
         action: {
@@ -470,12 +451,10 @@ export function AppProvider({ children }: AppProviderProps) {
         },
       });
 
-      // In dev mode without a backend, skip the system notification
       if (isDevMode() && !serverStatus.is_running) {
         return;
       }
 
-      // 2. Send Tauri system notification
       let hasPermission = await isPermissionGranted();
       if (!hasPermission) {
         const permission = await requestPermission();
@@ -485,16 +464,12 @@ export function AppProvider({ children }: AppProviderProps) {
       if (hasPermission) {
         const currentOs = type();
 
-        console.log(currentOs);
-
         if (currentOs === "linux") {
-          // Fallback directly to native notify-send on Linux
           await Command.create("notify-send", [
             `${email.subject || "New Email"}`,
             `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
           ]).execute();
         } else {
-          // Standard Tauri logic for Windows/macOS
           sendNotification({
             title: `${email.subject || "New Email"}`,
             body: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
@@ -510,7 +485,6 @@ export function AppProvider({ children }: AppProviderProps) {
     ],
   );
 
-  // Update showNewEmailNotificationRef when showNewEmailNotification changes
   useEffect(() => {
     showNewEmailNotificationRef.current = showNewEmailNotification;
   }, [showNewEmailNotification]);
@@ -526,7 +500,6 @@ export function AppProvider({ children }: AppProviderProps) {
         setServerStatus(status);
         logsClearedAtRef.current = null;
 
-        // Save the server config to settings
         await saveSettings({ serverConfig: config });
 
         void startAllAutoRefreshRef.current?.();
@@ -603,7 +576,6 @@ export function AppProvider({ children }: AppProviderProps) {
         setServerStatus(status);
         logsClearedAtRef.current = null;
 
-        // Save the server config to settings
         await saveSettings({ serverConfig: config });
 
         void startAllAutoRefreshRef.current?.();
@@ -623,9 +595,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setIsEmailsLoading(true);
     setEmailsError(null);
     try {
-      // In dev mode without a running server, return the dev emails
       if (isDevMode() && !serverStatus.is_running) {
-        // Don't overwrite emails if we already have them
         if (emails.length === 0) {
           setEmails(DEV_DEFAULT_EMAILS);
           setUnreadCount(DEV_DEFAULT_EMAILS.filter((e) => !e.is_read).length);
@@ -640,7 +610,6 @@ export function AppProvider({ children }: AppProviderProps) {
       setEmails(loadedEmails);
       setUnreadCount(count);
     } catch (err) {
-      // In dev mode, if the backend call fails, use default emails
       if (isDevMode()) {
         console.log("Using dev mode default emails (backend not available)");
         if (emails.length === 0) {
@@ -658,7 +627,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const markAsRead = useCallback(
     async (emailId: string) => {
       try {
-        // In dev mode without a running server, just update state locally
         if (isDevMode() && !serverStatus.is_running) {
           setEmails((prev) =>
             prev.map((e) => (e.id === emailId ? { ...e, is_read: true } : e)),
@@ -674,7 +642,6 @@ export function AppProvider({ children }: AppProviderProps) {
         setUnreadCount((prev) => Math.max(0, prev - 1));
       } catch (err) {
         console.error("Failed to mark email as read:", formatError(err));
-        // In dev mode, still update state locally
         if (isDevMode()) {
           setEmails((prev) =>
             prev.map((e) => (e.id === emailId ? { ...e, is_read: true } : e)),
@@ -689,7 +656,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const markAsUnread = useCallback(
     async (emailId: string) => {
       try {
-        // In dev mode without a running server, just update state locally
         if (isDevMode() && !serverStatus.is_running) {
           setEmails((prev) =>
             prev.map((e) => (e.id === emailId ? { ...e, is_read: false } : e)),
@@ -704,14 +670,12 @@ export function AppProvider({ children }: AppProviderProps) {
         );
         setUnreadCount((prev) => prev + 1);
 
-        // Update server status
         setServerStatus((prev) => ({
           ...prev,
           unread_emails: prev.unread_emails + 1,
         }));
       } catch (err) {
         console.error("Failed to mark email as unread:", formatError(err));
-        // In dev mode, still update state locally
         if (isDevMode()) {
           setEmails((prev) =>
             prev.map((e) => (e.id === emailId ? { ...e, is_read: false } : e)),
@@ -731,7 +695,6 @@ export function AppProvider({ children }: AppProviderProps) {
     if (isInitialLogsLoadRef.current) setIsLogsLoading(true);
     setLogsError(null);
     try {
-      // In dev mode without a running server, set empty logs
       if (isDevMode() && !serverStatus.is_running) {
         setLogs([]);
         isInitialLogsLoadRef.current = false;
@@ -750,7 +713,6 @@ export function AppProvider({ children }: AppProviderProps) {
       setLogs(serverLogs);
       isInitialLogsLoadRef.current = false;
     } catch (err) {
-      // In dev mode, just set empty logs
       if (isDevMode()) {
         setLogs([]);
         isInitialLogsLoadRef.current = false;
@@ -782,19 +744,15 @@ export function AppProvider({ children }: AppProviderProps) {
     setIsLogsPaused((prev) => !prev);
   }, []);
 
-  // ==================== Email Management Functions ====================
-
   const deleteEmail = useCallback(
     async (emailId: string) => {
       try {
-        // In dev mode without a running server, just update state locally
         if (isDevMode() && !serverStatus.is_running) {
           const deletedEmail = emails.find((e) => e.id === emailId);
           setEmails((prev) => prev.filter((e) => e.id !== emailId));
           if (deletedEmail && !deletedEmail.is_read) {
             setUnreadCount((prev) => Math.max(0, prev - 1));
           }
-          // If the deleted email was selected, clear selection
           setSelectedEmail((prev) => (prev?.id === emailId ? null : prev));
           toast.success("Email deleted");
           return;
@@ -805,12 +763,10 @@ export function AppProvider({ children }: AppProviderProps) {
         const deletedEmail = emails.find((e) => e.id === emailId);
         setEmails((prev) => prev.filter((e) => e.id !== emailId));
 
-        // Update unread count if needed
         if (deletedEmail && !deletedEmail.is_read) {
           setUnreadCount((prev) => Math.max(0, prev - 1));
         }
 
-        // Update server status counts
         setServerStatus((prev) => ({
           ...prev,
           total_emails: Math.max(0, prev.total_emails - 1),
@@ -820,7 +776,6 @@ export function AppProvider({ children }: AppProviderProps) {
               : prev.unread_emails,
         }));
 
-        // If the deleted email was selected, clear selection
         setSelectedEmail((prev) => (prev?.id === emailId ? null : prev));
 
         toast.success("Email deleted successfully");
@@ -828,7 +783,6 @@ export function AppProvider({ children }: AppProviderProps) {
         const message = formatError(err);
         console.error("Failed to delete email:", message);
 
-        // In dev mode, still update state locally
         if (isDevMode()) {
           const deletedEmail = emails.find((e) => e.id === emailId);
           setEmails((prev) => prev.filter((e) => e.id !== emailId));
@@ -848,7 +802,6 @@ export function AppProvider({ children }: AppProviderProps) {
 
   const clearAllEmails = useCallback(async () => {
     try {
-      // In dev mode without a running server, just update state locally
       if (isDevMode() && !serverStatus.is_running) {
         setEmails([]);
         setUnreadCount(0);
@@ -878,7 +831,6 @@ export function AppProvider({ children }: AppProviderProps) {
       const message = formatError(err);
       console.error("Failed to clear all emails:", message);
 
-      // In dev mode, still update state locally
       if (isDevMode()) {
         setEmails([]);
         setUnreadCount(0);
@@ -896,7 +848,6 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, [serverStatus.is_running]);
 
-  // Helper function to delete the currently selected email
   const deleteSelectedEmail = useCallback(async () => {
     if (selectedEmail) {
       await deleteEmail(selectedEmail.id);
@@ -910,7 +861,6 @@ export function AppProvider({ children }: AppProviderProps) {
   const startAllAutoRefresh = useCallback(async () => {
     clearAllTimers();
 
-    // In dev mode without a running server, don't start auto-refresh
     if (isDevMode() && !serverStatus.is_running) {
       return;
     }
@@ -957,7 +907,6 @@ export function AppProvider({ children }: AppProviderProps) {
 
     const setupListeners = async () => {
       try {
-        // Listen for new emails
         const unlisten1 = await listen<Email>(EVENTS.NEW_EMAIL, (event) => {
           if (!isMounted) return;
           const newEmail = event.payload;
@@ -970,12 +919,10 @@ export function AppProvider({ children }: AppProviderProps) {
             unread_emails: prev.unread_emails + 1,
           }));
 
-          // Use the ref to call the notification function
           showNewEmailNotificationRef.current(newEmail);
         });
         unlistenFunctions.push(unlisten1);
 
-        // Listen for email read events
         const unlisten2 = await listen<string>(EVENTS.EMAIL_READ, (event) => {
           if (!isMounted) return;
           const emailId = event.payload;
@@ -992,7 +939,6 @@ export function AppProvider({ children }: AppProviderProps) {
         });
         unlistenFunctions.push(unlisten2);
 
-        // Listen for email unread events
         const unlisten3 = await listen<string>(EVENTS.EMAIL_UNREAD, (event) => {
           if (!isMounted) return;
           const emailId = event.payload;
@@ -1009,7 +955,6 @@ export function AppProvider({ children }: AppProviderProps) {
         });
         unlistenFunctions.push(unlisten3);
 
-        // Listen for server status changes
         const unlisten4 = await listen<ServerStatus>(
           EVENTS.SERVER_STATUS,
           (event) => {
@@ -1032,7 +977,6 @@ export function AppProvider({ children }: AppProviderProps) {
         );
         unlistenFunctions.push(unlisten4);
       } catch (err) {
-        // Always log the error - don't suppress it
         console.error("Failed to set up event listeners:", formatError(err));
       }
     };
@@ -1046,7 +990,7 @@ export function AppProvider({ children }: AppProviderProps) {
     };
   }, [clearAllTimers]);
 
-  // Initial load - load settings first, then data
+  // Initial load
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -1085,15 +1029,14 @@ export function AppProvider({ children }: AppProviderProps) {
     clearLogs,
     toggleLogsPause,
     refreshAll,
-    // Email management methods
     deleteEmail,
     clearAllEmails,
     deleteSelectedEmail,
-    // Settings methods
     settings,
     saveSettings,
     loadSettings,
     isSettingsLoading,
+    isSavingSettings,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
