@@ -91,6 +91,8 @@ export interface EmailClientConfig {
   accentColor: string;
   fontFamily: string;
   avatarBg: string;
+  bgColor?: string;
+  bgColorDark?: string;
 }
 
 export interface HTMLPreviewProps {

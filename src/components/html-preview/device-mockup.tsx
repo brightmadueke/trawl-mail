@@ -1,15 +1,20 @@
 import { useMemo } from "react";
-import { cn } from "@/lib/utils.ts";
-import { EmailClientMockup } from "./email-client-mockup.tsx";
-import { PhoneStatusBar } from "@/components/html-preview/device-elements/phone-status-bar.tsx";
-import { DynamicIsland } from "@/components/html-preview/device-elements/dynamic-island.tsx";
-import { Notch } from "@/components/html-preview/device-elements/notch.tsx";
-import { HomeIndicator } from "@/components/html-preview/device-elements/home-indicator.tsx";
-import { ScreenGlare } from "@/components/html-preview/device-elements/screen-glare.tsx";
-import { DeviceButtons } from "@/components/html-preview/device-elements/device-buttons.tsx";
-import { CameraElement } from "@/components/html-preview/device-elements/camera-element.tsx";
-import type { DeviceConfig, EmailClient, EmailClientConfig, ThemeMode } from "@/types/html-preview.ts";
-import { Email } from "@/types/app.ts";
+import { cn } from "@/lib/utils";
+import { EmailClientMockup } from "./email-client-mockup";
+import { PhoneStatusBar } from "@/components/html-preview/device-elements/phone-status-bar";
+import { DynamicIsland } from "@/components/html-preview/device-elements/dynamic-island";
+import { Notch } from "@/components/html-preview/device-elements/notch";
+import { HomeIndicator } from "@/components/html-preview/device-elements/home-indicator";
+import { ScreenGlare } from "@/components/html-preview/device-elements/screen-glare";
+import { DeviceButtons } from "@/components/html-preview/device-elements/device-buttons";
+import { CameraElement } from "@/components/html-preview/device-elements/camera-element";
+import type {
+  DeviceConfig,
+  EmailClient,
+  EmailClientConfig,
+  ThemeMode,
+} from "@/types/html-preview";
+import { Email } from "@/types/app";
 
 // ============================================================================
 // TYPES
@@ -58,7 +63,10 @@ export function DeviceMockup({
     [deviceConfig, orientation],
   );
 
-  const bezelSize = deviceConfig.bezelWidth;
+  // ---- KEY CHANGE: no bezel for laptops/desktops ----
+  const isLaptopOrDesktop =
+    deviceConfig.category === "desktop" || deviceConfig.category === "laptop";
+  const bezelSize = isLaptopOrDesktop ? 0 : deviceConfig.bezelWidth;
 
   // Different padding for different device categories
   const framePadding =
@@ -97,12 +105,8 @@ export function DeviceMockup({
             ? 36
             : 24;
 
-  // Content dimensions
-  const contentWidth = displayWidth;
-  const contentHeight =
-    deviceConfig.category === "desktop" || deviceConfig.category === "laptop"
-      ? displayHeight
-      : displayHeight - contentTopOffset;
+  // Content top position (now 0 for laptops because bezelSize = 0)
+  const contentTop = bezelSize + contentTopOffset;
 
   // Get the status bar background color from email client config
   const statusBarBg =
@@ -111,6 +115,9 @@ export function DeviceMockup({
   // Apply scale directly to dimensions instead of CSS transform
   const scaledFrameWidth = frameWidth * scale;
   const scaledFrameHeight = frameHeight * scale;
+
+  // Determine if this is a mobile device
+  const isMobile = deviceConfig.category === "phone";
 
   return (
     <div
@@ -122,15 +129,14 @@ export function DeviceMockup({
       style={{
         width: `${scaledFrameWidth}px`,
         height: `${scaledFrameHeight}px`,
+        borderRadius: `${deviceConfig.borderRadius}px`,
       }}
     >
       <div
         className="absolute inset-0"
         style={{
           background: showFrame ? deviceConfig.frameGradient : "transparent",
-          borderRadius: showFrame
-            ? `${deviceConfig.borderRadius * scale}px`
-            : "0px",
+          borderRadius: showFrame ? `${deviceConfig.borderRadius}px` : "0px",
           boxShadow: showFrame
             ? `0 0 0 1px ${deviceConfig.frameBorderColor}, 
                0 ${25 * scale}px ${50 * scale}px -12px rgba(0, 0, 0, 0.5),
@@ -148,10 +154,6 @@ export function DeviceMockup({
             className="absolute inset-0 pointer-events-none"
             style={{
               borderRadius: `${deviceConfig.borderRadius}px`,
-              background: `linear-gradient(135deg, 
-                rgba(255,255,255,0.15) 0%, 
-                rgba(255,255,255,0) 50%,
-                rgba(0,0,0,0.1) 100%)`,
               zIndex: 1,
             }}
           />
@@ -187,14 +189,23 @@ export function DeviceMockup({
               <>
                 <DynamicIsland />
                 <div
-                  className="absolute left-0 right-0 z-20"
+                  className={cn(
+                    "absolute left-0 right-0 z-20",
+                    theme === "dark"
+                      ? clientConfig.headerBgDark
+                      : clientConfig.headerBg,
+                  )}
                   style={{
-                    top: "8px",
-                    height: "35px",
+                    top: 0,
+                    height: "57px",
                   }}
                 >
                   <PhoneStatusBar
-                    backgroundColor="transparent"
+                    backgroundColor={
+                      theme === "dark"
+                        ? clientConfig.headerTextDark
+                        : clientConfig.headerText
+                    }
                     hasDynamicIsland={true}
                   />
                 </div>
@@ -206,14 +217,23 @@ export function DeviceMockup({
               <>
                 <Notch />
                 <div
-                  className="absolute left-0 right-0 z-20"
+                  className={cn(
+                    "absolute left-0 right-0 z-20",
+                    theme === "dark"
+                      ? clientConfig.headerBgDark
+                      : clientConfig.headerBg,
+                  )}
                   style={{
                     top: 0,
-                    height: "33px",
+                    height: "53px",
                   }}
                 >
                   <PhoneStatusBar
-                    backgroundColor="transparent"
+                    backgroundColor={
+                      theme === "dark"
+                        ? clientConfig.headerTextDark
+                        : clientConfig.headerText
+                    }
                     hasNotch={true}
                   />
                 </div>
@@ -229,16 +249,25 @@ export function DeviceMockup({
             {deviceConfig.camera.type === "punch-hole" && (
               <>
                 <div
-                  className="absolute z-20"
+                  className={cn(
+                    "absolute z-20",
+                    theme === "dark"
+                      ? clientConfig.headerBgDark
+                      : clientConfig.headerBg,
+                  )}
                   style={{
-                    top: "8px",
-                    height: "28px",
+                    top: 0,
+                    height: "48px",
                     left: 0,
                     right: 0,
                   }}
                 >
                   <PhoneStatusBar
-                    backgroundColor={statusBarBg}
+                    backgroundColor={
+                      theme === "dark"
+                        ? clientConfig.headerTextDark
+                        : clientConfig.headerText
+                    }
                     hasPunchHole={true}
                   />
                 </div>
@@ -264,12 +293,23 @@ export function DeviceMockup({
 
             {/* Content Area */}
             <div
-              className="absolute overflow-hidden"
+              className={`absolute overflow-hidden ${isMobile ? "h-svh" : ""}`}
               style={{
-                top: `${bezelSize + contentTopOffset}px`,
-                left: `${bezelSize}px`,
-                width: `${contentWidth}px`,
-                height: `${contentHeight}px`,
+                top: `${contentTop}px`,
+                left: 0,
+                right: 0,
+                // For laptops/desktops, the content height is exactly the screen glass height (no bezel)
+                // For other devices, use h-svh (dynamic) which works for mobile
+                ...(isLaptopOrDesktop
+                  ? { height: `${screenAreaHeight}px`, bottom: "auto" }
+                  : {}),
+                // Make sure the content doesn't overflow the rounded corners
+                borderBottomLeftRadius: isLaptopOrDesktop
+                  ? `${deviceConfig.screenBorderRadius}px`
+                  : undefined,
+                borderBottomRightRadius: isLaptopOrDesktop
+                  ? `${deviceConfig.screenBorderRadius}px`
+                  : undefined,
               }}
             >
               <EmailClientMockup
@@ -279,6 +319,7 @@ export function DeviceMockup({
                 emailClient={emailClient}
                 iframeKey={iframeKey}
                 selectedEmail={selectedEmail}
+                isMobile={isMobile}
               />
 
               {/* Screen Glare Effect */}
@@ -292,7 +333,7 @@ export function DeviceMockup({
 
             {/* Home Indicator - floats on top of content with no extra space */}
             {deviceConfig.hasHomeBar && (
-              <HomeIndicator deviceConfig={deviceConfig} />
+              <HomeIndicator deviceConfig={deviceConfig} theme={theme} />
             )}
           </div>
         )}

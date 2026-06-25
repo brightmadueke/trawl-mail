@@ -1,10 +1,38 @@
 import type { EmailClientConfig, ThemeMode } from "@/types/html-preview.ts";
-import { EmailContentIframe } from "./email-content-iframe.tsx";
+import IconButton from "@/components/icon-button.tsx";
+import {
+  AlertCircle,
+  ArchiveIcon,
+  ArrowLeftIcon,
+  ChevronDown,
+  ChevronUp,
+  EllipsisVertical,
+  FileText,
+  Folder,
+  Forward,
+  Inbox,
+  Lock,
+  Menu,
+  Pencil,
+  Reply,
+  Search,
+  Send,
+  Star,
+  Trash2Icon,
+  Users,
+} from "lucide-react";
+import { cn } from "@/lib/utils.ts";
+import { Button } from "@/components/ui/button.tsx";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import React, { useState } from "react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible.tsx";
 import { Email } from "@/types/app.ts";
-
-// ============================================================================
-// OUTLOOK UI
-// ============================================================================
+import { EmailContentIframe } from "@/components/html-preview/email-client-uis/email-content-iframe.tsx";
 
 interface EmailClientUIProps {
   clientConfig: EmailClientConfig;
@@ -12,292 +40,526 @@ interface EmailClientUIProps {
   emailHTML: string;
   iframeKey: number;
   selectedEmail: Email;
+  isMobile: boolean;
 }
 
-export function OutlookUI({
-  clientConfig,
-  theme,
+// ----------------------------------------------------------------------------
+// Shared Email Content
+// ----------------------------------------------------------------------------
+function EmailContent({
+  selectedEmail,
   emailHTML,
   iframeKey,
-  selectedEmail,
-}: EmailClientUIProps) {
-  const isDark = theme === "dark";
-  const bg = isDark ? "#1a1a1a" : "#ffffff";
-  const headerBg = "#0078D4";
-  const textColor = isDark ? "#ffffff" : "#333333";
-  const mutedColor = isDark ? "#cccccc" : "#666666";
-  const borderColor = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
-  const sidebarBg = isDark ? "#1C1C1E" : "#F4F4F4";
+  clientConfig,
+}: {
+  selectedEmail: Email;
+  emailHTML: string;
+  iframeKey: number;
+  clientConfig: EmailClientConfig;
+  isDark: boolean;
+}) {
+  const [collapsibleOpen, setCollapsibleOpen] = useState(false);
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: bg }}>
-      {/* Left Sidebar */}
-      <div
-        className="w-[48px] flex-shrink-0 flex flex-col items-center py-2 gap-1"
-        style={{
-          backgroundColor: sidebarBg,
-          borderRight: `1px solid ${borderColor}`,
-        }}
-      >
-        <OutlookSidebarIcon icon={<MailIcon />} label="Mail" active />
-        <OutlookSidebarIcon icon={<CalendarIcon />} label="Calendar" />
-        <OutlookSidebarIcon icon={<PeopleIcon />} label="People" />
-        <OutlookSidebarIcon icon={<TasksIcon />} label="Tasks" />
-      </div>
-
-      {/* Folder List */}
-      <div
-        className="w-[180px] flex-shrink-0 border-r flex flex-col"
-        style={{ backgroundColor: bg, borderColor: borderColor }}
-      >
-        <div className="p-3 border-b" style={{ borderColor: borderColor }}>
-          <button
-            className="w-full py-2 px-3 rounded text-white text-sm font-medium"
-            style={{ backgroundColor: headerBg }}
-          >
-            + New Message
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          <OutlookFolderItem label="Inbox" count="12" active />
-          <OutlookFolderItem label="Drafts" count="3" />
-          <OutlookFolderItem label="Sent Items" />
-          <OutlookFolderItem label="Deleted Items" />
-          <OutlookFolderItem label="Archive" />
-          <OutlookFolderItem label="Junk Email" />
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Ribbon */}
-        <div
-          className="flex items-center gap-1 px-3 py-2 border-b"
-          style={{
-            backgroundColor: headerBg,
-            borderColor: "rgba(255,255,255,0.1)",
-            color: "#ffffff",
-          }}
-        >
-          <OutlookRibbonButton icon={<ReplyOIcon />} label="Reply" />
-          <OutlookRibbonButton icon={<ReplyAllIcon />} label="Reply All" />
-          <OutlookRibbonButton icon={<ForwardOIcon />} label="Forward" />
-          <div className="w-px h-6 bg-white/20 mx-2" />
-          <OutlookRibbonButton icon={<DeleteOIcon />} label="Delete" />
-          <OutlookRibbonButton icon={<ArchiveOIcon />} label="Archive" />
-          <OutlookRibbonButton icon={<FlagOIcon />} label="Flag" />
-          <div className="flex-1" />
-          <OutlookRibbonButton icon={<MoreOIcon />} label="More" />
-        </div>
-
-        {/* Email Content */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Subject */}
-          <div className="px-6 pt-5 pb-3">
-            <h1 className="text-xl font-semibold" style={{ color: textColor }}>
-              {selectedEmail.subject}
-            </h1>
-          </div>
-
-          {/* Sender Info */}
-          <div
-            className="px-6 pb-4 mb-4 border-b flex items-start gap-3"
-            style={{ borderColor: borderColor }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0"
-              style={{ backgroundColor: clientConfig.avatarBg }}
-            >
-              {selectedEmail.sender_name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div
-                className="font-semibold text-sm"
-                style={{ color: textColor }}
+    <div className="flex flex-col gap-2">
+      <Collapsible open={collapsibleOpen} onOpenChange={setCollapsibleOpen}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar size="lg">
+              <AvatarFallback
+                className="text-white text-xl"
+                style={{ backgroundColor: clientConfig.avatarBg }}
               >
-                {selectedEmail.sender_name}
+                {selectedEmail.sender_name.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-md font-semibold">
+                  {selectedEmail.sender_name}
+                </span>
+                <span className="text-sm text-gray-500">
+                  {new Date(selectedEmail.date).toLocaleString("en-US", {
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </span>
               </div>
-              <div className="text-xs" style={{ color: mutedColor }}>
-                {selectedEmail.from}
+              <div className="flex items-center gap-1 text-sm text-gray-500">
+                <span>To: {selectedEmail.to}</span>
+                <CollapsibleTrigger asChild>
+                  <IconButton
+                    icon={collapsibleOpen ? <ChevronUp /> : <ChevronDown />}
+                    variant="ghost"
+                    size="icon-xs"
+                    className="rounded-full"
+                  />
+                </CollapsibleTrigger>
               </div>
-              <div className="text-xs" style={{ color: mutedColor }}>
-                To: {selectedEmail.to}
-              </div>
-            </div>
-            <div className="text-xs" style={{ color: mutedColor }}>
-              {selectedEmail.date}
             </div>
           </div>
-
-          {/* Email Body */}
-          <div className="px-6">
-            <EmailContentIframe emailHTML={emailHTML} iframeKey={iframeKey} />
+          <div className="flex items-center gap-1">
+            <IconButton
+              icon={<Reply />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<Forward />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<EllipsisVertical />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
           </div>
         </div>
+
+        <CollapsibleContent className="mt-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
+            <span className="text-gray-500">From:</span>
+            <span>
+              {selectedEmail.sender_name}{" "}
+              <span className="text-gray-400">({selectedEmail.from})</span>
+            </span>
+            <span className="text-gray-500">To:</span>
+            <span className="text-gray-500">{selectedEmail.to}</span>
+            <span className="text-gray-500">Date:</span>
+            <span className="text-gray-500">
+              {new Date(selectedEmail.date).toLocaleString("en-US", {
+                month: "short",
+                day: "2-digit",
+                year: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+              })}
+            </span>
+            <span className="text-gray-500 flex items-center">
+              <Lock size={14} className="mr-1" />
+            </span>
+            <span className="text-gray-500">Encrypted</span>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      <div className="mt-2">
+        <EmailContentIframe emailHTML={emailHTML} iframeKey={iframeKey} />
       </div>
     </div>
   );
 }
 
-// ============================================================================
-// OUTLOOK SUB-COMPONENTS
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Mobile version
+// ----------------------------------------------------------------------------
+function OutlookUIMobile(props: EmailClientUIProps) {
+  const { clientConfig, theme, emailHTML, iframeKey, selectedEmail } = props;
+  const isDark = theme === "dark";
 
-function OutlookSidebarIcon({
-  icon,
-  label,
-  active = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <button
-      className="w-9 h-9 rounded flex items-center justify-center transition-colors"
-      style={{
-        backgroundColor: active ? "rgba(0,120,212,0.1)" : "transparent",
-        color: active ? "#0078D4" : "#666666",
-      }}
-      title={label}
-      aria-label={label}
-    >
-      <span className="w-5 h-5">{icon}</span>
-    </button>
-  );
-}
-
-function OutlookFolderItem({
-  label,
-  count,
-  active = false,
-}: {
-  label: string;
-  count?: string;
-  active?: boolean;
-}) {
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 rounded text-sm cursor-pointer transition-colors"
-      style={{
-        backgroundColor: active ? "rgba(0,120,212,0.1)" : "transparent",
-        color: active ? "#0078D4" : "#333333",
-        fontWeight: active ? 600 : 400,
-      }}
+      className={cn(
+        "h-full w-full flex flex-col overflow-hidden",
+        isDark ? clientConfig.bgColorDark : clientConfig.bgColor,
+      )}
     >
-      <span className="flex-1">{label}</span>
-      {count && <span className="text-xs opacity-60">{count}</span>}
+      {/* Header */}
+      <header
+        className={cn(
+          "flex items-center gap-2 px-4 py-3 border-b",
+          isDark
+            ? `${clientConfig.headerBgDark} border-gray-700`
+            : `${clientConfig.headerBg} border-[${clientConfig.accentColor}]`,
+        )}
+      >
+        <IconButton
+          icon={
+            <ArrowLeftIcon
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+          tooltip="Back"
+        />
+        <span
+          className={cn(
+            "font-semibold text-lg flex-1 truncate",
+            isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+          )}
+        >
+          {selectedEmail.subject}
+        </span>
+        <IconButton
+          icon={
+            <ArchiveIcon
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+        <IconButton
+          icon={
+            <Trash2Icon
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+        <IconButton
+          icon={
+            <EllipsisVertical
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+      </header>
+
+      {/* Email content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <EmailContent
+          selectedEmail={selectedEmail}
+          emailHTML={emailHTML}
+          iframeKey={iframeKey}
+          clientConfig={clientConfig}
+          isDark={isDark}
+        />
+      </div>
+
+      {/* Reply/Forward bar */}
+      <div
+        className={cn(
+          "flex gap-2 p-4 border-t",
+          isDark
+            ? `${clientConfig.headerBgDark} border-gray-700`
+            : "bg-gray-50 border-gray-200",
+        )}
+      >
+        <Button
+          className="rounded-full h-12 flex-1 text-white"
+          style={{ backgroundColor: clientConfig.accentColor }}
+        >
+          <Reply className="mr-2 h-4 w-4" /> Reply
+        </Button>
+        <Button
+          variant="outline"
+          className={cn(
+            "rounded-full h-12 flex-1",
+            isDark
+              ? "border-gray-600 text-gray-200"
+              : "border-gray-300 text-gray-700",
+          )}
+        >
+          <Forward className="mr-2 h-4 w-4" /> Forward
+        </Button>
+      </div>
     </div>
   );
 }
 
-function OutlookRibbonButton({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
+// ----------------------------------------------------------------------------
+// Desktop version
+// ----------------------------------------------------------------------------
+function OutlookUIDesktop(props: EmailClientUIProps) {
+  const { clientConfig, theme, emailHTML, iframeKey, selectedEmail } = props;
+  const isDark = theme === "dark";
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   return (
-    <button
-      className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-white/10 transition-colors"
-      title={label}
-      aria-label={label}
+    <div
+      className={cn(
+        "h-full w-full flex overflow-hidden",
+        isDark ? clientConfig.bgColorDark : clientConfig.bgColor,
+      )}
     >
-      <span className="w-4 h-4">{icon}</span>
-      <span>{label}</span>
-    </button>
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "w-64 shrink-0 flex flex-col border-r transition-all duration-200",
+          isDark
+            ? `${clientConfig.headerBgDark} border-gray-700`
+            : "bg-white border-gray-200",
+          !sidebarOpen && "w-0 overflow-hidden border-0",
+        )}
+      >
+        {/* Logo / hamburger */}
+        <div className="flex items-center gap-2 p-4 border-b border-gray-200 dark:border-gray-700">
+          <IconButton
+            icon={<Menu className="text-gray-600 dark:text-gray-300" />}
+            variant="ghost"
+            className="rounded-full"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <span
+            className="text-xl font-semibold"
+            style={{ color: clientConfig.accentColor }}
+          >
+            Outlook
+          </span>
+        </div>
+
+        {/* New message */}
+        <div className="px-4 py-3">
+          <Button
+            className="w-full rounded-full text-white shadow-sm"
+            style={{ backgroundColor: clientConfig.accentColor }}
+          >
+            <Pencil className="mr-2 h-4 w-4" /> New message
+          </Button>
+        </div>
+
+        {/* Folder list */}
+        <nav className="flex-1 px-2 py-2 space-y-1 overflow-y-auto">
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md"
+            style={{
+              backgroundColor: isDark
+                ? `${clientConfig.accentColor}30`
+                : "#e6f2fc",
+              color: clientConfig.accentColor,
+            }}
+          >
+            <Inbox className="mr-3 h-5 w-5" /> Inbox
+            <span
+              className="ml-auto text-xs text-white rounded-full px-2 py-0.5"
+              style={{ backgroundColor: clientConfig.accentColor }}
+            >
+              42
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <Send className="mr-3 h-5 w-5" /> Sent Items
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <FileText className="mr-3 h-5 w-5" /> Drafts
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <Trash2Icon className="mr-3 h-5 w-5" /> Deleted Items
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <Folder className="mr-3 h-5 w-5" /> Archive
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <AlertCircle className="mr-3 h-5 w-5" /> Junk Email
+          </Button>
+        </nav>
+
+        {/* Groups */}
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            Groups
+          </span>
+          <div className="mt-1 space-y-1">
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <Users size={16} /> Team Alpha
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <Users size={16} /> Project Beta
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main area */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Ribbon / Top bar */}
+        <header
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 border-b",
+            isDark
+              ? `${clientConfig.headerBgDark} border-gray-700`
+              : `${clientConfig.headerBg} border-gray-200`,
+          )}
+        >
+          {!sidebarOpen && (
+            <IconButton
+              icon={<Menu className="text-gray-600 dark:text-gray-300" />}
+              variant="ghost"
+              className="rounded-full"
+              onClick={() => setSidebarOpen(true)}
+            />
+          )}
+          <div className="flex-1 flex items-center gap-2">
+            <IconButton
+              icon={<ArrowLeftIcon />}
+              variant="ghost"
+              className="rounded-full"
+              tooltip="Back"
+            />
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search"
+                className="pl-9 rounded-full bg-gray-100 dark:bg-gray-800 border-0 focus-visible:ring-1"
+                style={
+                  {
+                    "--tw-ring-color": clientConfig.accentColor,
+                  } as React.CSSProperties
+                }
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <IconButton
+              icon={<Reply />}
+              variant="ghost"
+              className="rounded-full"
+              tooltip="Reply"
+            />
+            <IconButton
+              icon={<Forward />}
+              variant="ghost"
+              className="rounded-full"
+              tooltip="Forward"
+            />
+            <IconButton
+              icon={<ArchiveIcon />}
+              variant="ghost"
+              className="rounded-full"
+              tooltip="Archive"
+            />
+            <IconButton
+              icon={<Trash2Icon />}
+              variant="ghost"
+              className="rounded-full"
+              tooltip="Delete"
+            />
+            <IconButton
+              icon={<EllipsisVertical />}
+              variant="ghost"
+              className="rounded-full"
+            />
+            <div className="border-l mx-2 h-6 border-gray-300 dark:border-gray-600" />
+            <Avatar className="h-8 w-8">
+              <AvatarFallback
+                className="text-white text-sm"
+                style={{ backgroundColor: clientConfig.avatarBg }}
+              >
+                U
+              </AvatarFallback>
+            </Avatar>
+          </div>
+        </header>
+
+        {/* Email view */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div
+            className={cn(
+              "max-w-4xl mx-auto rounded-lg shadow-sm border",
+              isDark
+                ? "bg-[#2b2b2b] border-gray-700"
+                : "bg-white border-gray-200",
+            )}
+          >
+            {/* Subject line */}
+            <div className="px-6 pt-6 pb-2 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <IconButton
+                    icon={<ArrowLeftIcon />}
+                    variant="ghost"
+                    className="rounded-full"
+                    tooltip="Back"
+                  />
+                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                    {selectedEmail.subject}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-1">
+                  <IconButton
+                    icon={<Star />}
+                    variant="ghost"
+                    className="rounded-full"
+                  />
+                  <IconButton
+                    icon={<EllipsisVertical />}
+                    variant="ghost"
+                    className="rounded-full"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {selectedEmail.sender_name}
+                </span>
+                <span>&lt;{selectedEmail.from}&gt;</span>
+              </div>
+            </div>
+
+            {/* Email content */}
+            <div className="p-6">
+              <EmailContent
+                selectedEmail={selectedEmail}
+                emailHTML={emailHTML}
+                iframeKey={iframeKey}
+                clientConfig={clientConfig}
+                isDark={isDark}
+              />
+            </div>
+
+            {/* Reply/Forward actions */}
+            <div className="flex gap-2 px-6 pb-6">
+              <Button
+                className="rounded-full px-6 text-white"
+                style={{ backgroundColor: clientConfig.accentColor }}
+              >
+                <Reply className="mr-2 h-4 w-4" /> Reply
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-full px-6 border-gray-300 dark:border-gray-600"
+              >
+                <Forward className="mr-2 h-4 w-4" /> Forward
+              </Button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
 
-// ============================================================================
-// OUTLOOK ICONS
-// ============================================================================
-
-function MailIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-      <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z" />
-    </svg>
-  );
-}
-
-function PeopleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-    </svg>
-  );
-}
-
-function TasksIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z" />
-    </svg>
-  );
-}
-
-function ReplyOIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z" />
-    </svg>
-  );
-}
-
-function ReplyAllIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M7 8V5l-7 7 7 7v-3l-4-4 4-4zm6 1V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z" />
-    </svg>
-  );
-}
-
-function ForwardOIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z" />
-    </svg>
-  );
-}
-
-function DeleteOIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-    </svg>
-  );
-}
-
-function ArchiveOIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z" />
-    </svg>
-  );
-}
-
-function FlagOIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" />
-    </svg>
-  );
-}
-
-function MoreOIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-    </svg>
+// ----------------------------------------------------------------------------
+// Main export
+// ----------------------------------------------------------------------------
+export function OutlookUI(props: EmailClientUIProps) {
+  return props.isMobile ? (
+    <OutlookUIMobile {...props} />
+  ) : (
+    <OutlookUIDesktop {...props} />
   );
 }

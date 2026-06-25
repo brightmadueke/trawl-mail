@@ -1,13 +1,13 @@
-// src/App.tsx
+// src/App
 
-import { SidebarProvider } from "@/components/ui/sidebar.tsx";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { BrowserRouter as Router, Route, Routes } from "react-router";
-import { AppSidebar } from "@/components/app-sidebar.tsx";
-import { AppHeader, HEADER_HEIGHT } from "@/components/app-header.tsx";
+import { AppSidebar } from "@/components/app-sidebar";
+import { AppHeader, HEADER_HEIGHT } from "@/components/app-header";
 import { lazy, Suspense, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AppProvider } from "@/components/app-context";
-import { SplashScreen } from "@/components/splash-screen.tsx";
+import { SplashScreen } from "@/components/splash-screen";
 
 const Inbox = lazy(() => import("@/components/inbox"));
 const Settings = lazy(() => import("@/components/settings"));

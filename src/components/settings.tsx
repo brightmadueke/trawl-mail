@@ -1,6 +1,12 @@
-// src/components/Settings.tsx - Updated to prevent flashing
+// src/components/Settings.tsx - Updated with proper max size handling
 
-import React, {useCallback, useEffect, useMemo, useRef, useState,} from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
   Bell,
@@ -16,29 +22,50 @@ import {
   Sun,
   Undo2,
 } from "lucide-react";
-import {toast} from "sonner";
-import {ServerConfig} from "@/types/app";
-import {useAppContext} from "@/components/app-context";
-import {Theme, useTheme} from "@/components/theme-provider";
-import {Button} from "@/components/ui/button.tsx";
-import {Badge} from "@/components/ui/badge.tsx";
-import {InputGroup, InputGroupInput} from "@/components/ui/input-group.tsx";
-import {Label} from "@/components/ui/label.tsx";
-import {Switch} from "@/components/ui/switch.tsx";
-import {InputOTP, InputOTPGroup, InputOTPSlot,} from "@/components/ui/input-otp";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select.tsx";
-import {ToggleGroup, ToggleGroupItem} from "@/components/ui/toggle-group.tsx";
-import {Separator} from "@/components/ui/separator.tsx";
-import {Card, CardContent, CardDescription, CardHeader, CardTitle,} from "@/components/ui/card.tsx";
-import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from "@/components/ui/tooltip.tsx";
+import { toast } from "sonner";
+import { ServerConfig } from "@/types/app";
+import { useAppContext } from "@/components/app-context";
+import { Theme, useTheme } from "@/components/theme-provider";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Separator } from "@/components/ui/separator";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-import {Spinner} from "@/components/ui/spinner.tsx";
-import {REGEXP_ONLY_DIGITS} from "input-otp";
+import { Spinner } from "@/components/ui/spinner";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
   host: "127.0.0.1",
   port: 2525,
-  max_message_size: 10485760,
+  max_message_size: 10485760, // 10 MB default
   require_auth: false,
 };
 
@@ -58,13 +85,18 @@ const padPortValue = (port: number, length: number = 4): string => {
   return port.toString().padStart(length, "0");
 };
 
+// Min 1MB, Max 1GB (practically unlimited for SMTP)
+const MIN_MESSAGE_SIZE = 1048576; // 1 MB
+const MAX_MESSAGE_SIZE = 1073741824; // 1 GB
+
 const SIZE_PRESETS = [
   { label: "1 MB", value: 1048576 },
   { label: "5 MB", value: 5242880 },
   { label: "10 MB", value: 10485760 },
   { label: "25 MB", value: 26214400 },
   { label: "50 MB", value: 52428800 },
-  { label: "Unlimited", value: 0 },
+  { label: "100 MB", value: 104857600 },
+  { label: "1 GB", value: 1073741824 },
 ];
 
 function SettingRow({
@@ -176,15 +208,16 @@ export function Settings() {
   );
 
   const [maxSizeInputValue, setMaxSizeInputValue] = useState(
-    settings.serverConfig?.max_message_size?.toString() || "",
+    (
+      settings.serverConfig?.max_message_size! ||
+      DEFAULT_SERVER_CONFIG.max_message_size!
+    ).toString(),
   );
 
-  // Keep these for visual feedback only
   const [showSaved, setShowSaved] = useState(false);
   const savedIndicatorTimeoutRef =
     useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Track if initial load is done
   const isInitialLoad = useRef(true);
 
   const hasChangesFromDefault = useMemo(() => {
@@ -215,13 +248,15 @@ export function Settings() {
     settings,
   ]);
 
-  // Sync with context settings when they load, but only if we haven't made local changes
   useEffect(() => {
     if (settings.serverConfig) {
       setServerConfig(settings.serverConfig);
       setPortDisplayValue(padPortValue(settings.serverConfig.port));
       setMaxSizeInputValue(
-        settings.serverConfig.max_message_size?.toString() || "",
+        (
+          settings.serverConfig.max_message_size! ||
+          DEFAULT_SERVER_CONFIG.max_message_size!
+        ).toString(),
       );
     }
     setNotificationsEnabled(settings.notificationsEnabled);
@@ -232,7 +267,6 @@ export function Settings() {
     setShowTimestamps(settings.showTimestamps);
     setAutoRefresh(settings.autoRefresh);
 
-    // Mark initial load as complete
     isInitialLoad.current = false;
   }, [settings]);
 
@@ -245,7 +279,6 @@ export function Settings() {
 
   const autoSave = useCallback(
     (updatedSettings: Partial<typeof settings>) => {
-      // Don't save during initial load
       if (isInitialLoad.current) return;
 
       saveSettings({
@@ -293,18 +326,19 @@ export function Settings() {
     (newValue: string) => {
       setMaxSizeInputValue(newValue);
       const parsed = parseInt(newValue);
-      if (!isNaN(parsed) && parsed >= 0) {
+      if (
+        !isNaN(parsed) &&
+        parsed >= MIN_MESSAGE_SIZE &&
+        parsed <= MAX_MESSAGE_SIZE
+      ) {
         const newConfig = {
           ...serverConfig,
           max_message_size: parsed,
         };
         setServerConfig(newConfig);
       } else if (newValue === "") {
-        const newConfig = {
-          ...serverConfig,
-          max_message_size: undefined,
-        };
-        setServerConfig(newConfig);
+        // Reset to current value when cleared
+        setMaxSizeInputValue(serverConfig.max_message_size!.toString());
       }
     },
     [serverConfig],
@@ -312,14 +346,17 @@ export function Settings() {
 
   const adjustMaxSize = useCallback(
     (delta: number) => {
-      const currentValue = serverConfig.max_message_size ?? 0;
-      const newValue = Math.max(0, currentValue + delta);
+      const currentValue = serverConfig.max_message_size;
+      const newValue = Math.max(
+        MIN_MESSAGE_SIZE,
+        Math.min(MAX_MESSAGE_SIZE, currentValue! + delta),
+      );
       const newConfig = {
         ...serverConfig,
-        max_message_size: newValue === 0 ? undefined : newValue,
+        max_message_size: newValue,
       };
       setServerConfig(newConfig);
-      setMaxSizeInputValue(newValue === 0 ? "" : newValue.toString());
+      setMaxSizeInputValue(newValue.toString());
       autoSave({ serverConfig: newConfig });
     },
     [serverConfig, autoSave],
@@ -329,10 +366,10 @@ export function Settings() {
     (value: number) => {
       const newConfig = {
         ...serverConfig,
-        max_message_size: value === 0 ? undefined : value,
+        max_message_size: value,
       };
       setServerConfig(newConfig);
-      setMaxSizeInputValue(value === 0 ? "" : value.toString());
+      setMaxSizeInputValue(value.toString());
       autoSave({ serverConfig: newConfig });
     },
     [serverConfig, autoSave],
@@ -376,8 +413,8 @@ export function Settings() {
   }, [saveSettings, setTheme]);
 
   const formatBytes = (bytes?: number) => {
-    if (bytes === undefined) return "Not set";
-    if (bytes === 0) return "Unlimited";
+    if (bytes === undefined) return "10.0 MB";
+    if (bytes >= MAX_MESSAGE_SIZE) return "1 GB (Max)";
     const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
@@ -537,7 +574,7 @@ export function Settings() {
               <div className="py-4">
                 <SettingRow
                   label="Max Message Size"
-                  description="Maximum allowed message size"
+                  description="Maximum allowed message size (1 MB - 1 GB)"
                 >
                   <div className="flex items-center gap-1">
                     <Button
@@ -545,6 +582,9 @@ export function Settings() {
                       size="icon"
                       className="h-9 w-9 rounded-l-lg rounded-r-none"
                       onClick={() => adjustMaxSize(-1048576)}
+                      disabled={
+                        serverConfig.max_message_size === MIN_MESSAGE_SIZE
+                      }
                     >
                       <Minus className="size-3" />
                     </Button>
@@ -553,8 +593,9 @@ export function Settings() {
                         type="number"
                         value={maxSizeInputValue}
                         onChange={(e) => handleMaxSizeChange(e.target.value)}
-                        placeholder="Unlimited"
-                        min="0"
+                        placeholder="10485760"
+                        min={MIN_MESSAGE_SIZE}
+                        max={MAX_MESSAGE_SIZE}
                         className="font-mono text-sm text-center rounded-none appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </InputGroup>
@@ -563,6 +604,9 @@ export function Settings() {
                       size="icon"
                       className="h-9 w-9 rounded-r-lg rounded-l-none"
                       onClick={() => adjustMaxSize(1048576)}
+                      disabled={
+                        serverConfig.max_message_size === MAX_MESSAGE_SIZE
+                      }
                     >
                       <Plus className="size-3" />
                     </Button>
@@ -574,7 +618,7 @@ export function Settings() {
                     <Badge
                       key={preset.label}
                       variant={
-                        (serverConfig.max_message_size ?? 0) === preset.value
+                        serverConfig.max_message_size === preset.value
                           ? "default"
                           : "secondary"
                       }

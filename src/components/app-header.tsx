@@ -1,13 +1,21 @@
-// src/components/app-header.tsx
+// src/components/app-header
 
-import { Maximize2, Minus, Play, RefreshCw, SquareStop, Tractor, X } from "lucide-react";
+import {
+  Maximize2,
+  Minus,
+  Play,
+  RefreshCw,
+  SquareStop,
+  Tractor,
+  X,
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useState } from "react";
 import { ServerConfig } from "@/types/app.ts";
 import { useAppContext } from "@/components/app-context";
-import IconButton from "@/components/icon-button.tsx";
+import IconButton from "@/components/icon-button";
 import { toast } from "sonner";
 
 export const HEADER_HEIGHT = "48px";
@@ -32,7 +40,7 @@ export function AppHeader() {
   const config: ServerConfig = settings.serverConfig || {
     host: "0.0.0.0",
     port: 2525,
-    max_message_size: 25_000_000,
+    max_message_size: 25000000,
     require_auth: false,
   };
 
@@ -45,6 +53,7 @@ export function AppHeader() {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.log(message);
       toast.error("Failed to start server!", {
         description: message,
       });

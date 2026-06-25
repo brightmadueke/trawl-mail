@@ -234,7 +234,7 @@ export const DEVICES: Record<DeviceType, DeviceConfig> = {
     camera: {
       type: "punch-hole",
       width: 4,
-      topOffset: 3,
+      topOffset: 1.7,
       leftOffset: 50,
     },
     buttons: [
@@ -275,7 +275,7 @@ export const DEVICES: Record<DeviceType, DeviceConfig> = {
     camera: {
       type: "punch-hole",
       width: 4,
-      topOffset: 3,
+      topOffset: 1.7,
       leftOffset: 50,
     },
     buttons: [
@@ -316,7 +316,7 @@ export const DEVICES: Record<DeviceType, DeviceConfig> = {
     camera: {
       type: "punch-hole",
       width: 4,
-      topOffset: 3,
+      topOffset: 1.7,
       leftOffset: 50,
     },
     buttons: [
@@ -357,7 +357,7 @@ export const DEVICES: Record<DeviceType, DeviceConfig> = {
     camera: {
       type: "punch-hole",
       width: 3.5,
-      topOffset: 3,
+      topOffset: 1.7,
       leftOffset: 50,
     },
     buttons: [
@@ -398,7 +398,7 @@ export const DEVICES: Record<DeviceType, DeviceConfig> = {
     camera: {
       type: "punch-hole",
       width: 3.5,
-      topOffset: 3,
+      topOffset: 1.7,
       leftOffset: 50,
     },
     buttons: [
@@ -439,7 +439,7 @@ export const DEVICES: Record<DeviceType, DeviceConfig> = {
     camera: {
       type: "punch-hole",
       width: 4,
-      topOffset: 3,
+      topOffset: 1.7,
       leftOffset: 50,
     },
     buttons: [

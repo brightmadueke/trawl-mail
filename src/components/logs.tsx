@@ -1,10 +1,19 @@
-// src/components/Logs.tsx
+// src/components/Logs
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   AlertCircle,
   AlertTriangle,
@@ -26,13 +35,17 @@ import {
   Search,
   Tag,
   Trash2,
-  XCircle
+  XCircle,
 } from "lucide-react";
 import { LogEntry } from "@/types/app";
 import { useAppContext } from "@/components/app-context";
 import { cn } from "@/lib/utils";
-import IconButton from "@/components/icon-button.tsx";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group.tsx"; // Props interface
+import IconButton from "@/components/icon-button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"; // Props interface
 
 // Props interface
 interface LogsProps {

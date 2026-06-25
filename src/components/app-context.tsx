@@ -1,7 +1,18 @@
-// src/components/app-context.tsx
+// src/components/app-context
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { Command } from "@tauri-apps/plugin-shell";

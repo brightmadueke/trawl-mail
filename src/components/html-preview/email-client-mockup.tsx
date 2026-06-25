@@ -7,7 +7,7 @@ import {
   OutlookUI,
   YahooMailUI,
 } from "./email-client-uis";
-import { Email } from "@/types/app.ts";
+import { Email } from "@/types/app.ts"; // ============================================================================
 
 // ============================================================================
 // TYPES
@@ -20,6 +20,7 @@ interface EmailClientMockupProps {
   emailClient: string;
   iframeKey: number;
   selectedEmail: Email;
+  isMobile: boolean;
 }
 
 // ============================================================================
@@ -33,6 +34,7 @@ export function EmailClientMockup({
   emailClient,
   iframeKey,
   selectedEmail,
+  isMobile,
 }: EmailClientMockupProps) {
   // Memoize the HTML content for the iframe
   const emailHTML = useMemo(() => {
@@ -60,6 +62,7 @@ export function EmailClientMockup({
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
     padding: 16px;
+    height: 100%;
   }
   
   img {
@@ -142,6 +145,7 @@ export function EmailClientMockup({
       emailHTML,
       iframeKey,
       selectedEmail,
+      isMobile,
     };
 
     switch (emailClient) {
@@ -161,6 +165,11 @@ export function EmailClientMockup({
   };
 
   return (
-    <div className="h-full w-full overflow-hidden">{renderEmailClientUI()}</div>
+    <div
+      className="h-full w-full overflow-hidden"
+      style={{ margin: 0, padding: 0 }}
+    >
+      {renderEmailClientUI()}
+    </div>
   );
 }

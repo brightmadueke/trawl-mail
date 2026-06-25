@@ -1,12 +1,17 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils.ts";
-import { TooltipProvider } from "@/components/ui/tooltip.tsx";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
-import { DeviceMockup } from "./device-mockup.tsx";
-import { PreviewControls } from "./preview-controls.tsx";
+import { DeviceMockup } from "./device-mockup";
+import { PreviewControls } from "./preview-controls";
 import { DEVICES } from "@/components/html-preview/data/devices.ts";
-import { EMAIL_CLIENTS } from "@/components/html-preview/data/email-clients.tsx";
-import type { DeviceType, EmailClient, HTMLPreviewProps, ThemeMode } from "@/types/html-preview.ts";
+import { EMAIL_CLIENTS } from "@/components/html-preview/data/email-clients";
+import type {
+  DeviceType,
+  EmailClient,
+  HTMLPreviewProps,
+  ThemeMode,
+} from "@/types/html-preview.ts"; // ============================================================================
 
 // ============================================================================
 // MAIN COMPONENT
@@ -237,7 +242,7 @@ export function HTMLPreview({
         className={cn(
           "flex flex-col h-full",
           isFullscreenView
-            ? "fixed inset-0 z-50 bg-black/95 backdrop-blur-sm"
+            ? "fixed inset-0 z-50 bg-background dark:bg-background backdrop-blur-sm"
             : "w-full",
           className,
         )}

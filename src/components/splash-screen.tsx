@@ -1,4 +1,4 @@
-import { Spinner } from "@/components/ui/spinner.tsx";
+import { Spinner } from "@/components/ui/spinner";
 
 export function SplashScreen() {
   return (

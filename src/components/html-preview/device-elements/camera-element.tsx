@@ -13,7 +13,7 @@ export function CameraElement({ config }: CameraElementProps) {
     <div
       className="absolute z-30"
       style={{
-        top: `${config.topOffset || 3}%`,
+        top: `${config.topOffset || 1.7}%`,
         left: `${config.leftOffset || 50}%`,
         transform: "translateX(-50%)",
         width: `${config.width}%`,

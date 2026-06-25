@@ -1,6 +1,10 @@
-// src/components/inbox.tsx - Complete with attachment handling
+// src/components/inbox - Complete with attachment handling
 
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group.tsx";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import {
   ArrowLeft,
   Copy,
@@ -16,29 +20,48 @@ import {
   Search,
   Trash2,
   User2,
-  X
+  X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button.tsx";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu.tsx";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "@/components/ui/badge.tsx";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar.tsx";
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils.ts";
 import { Attachment as AttachmentType, Email } from "@/types/app.ts";
 import { useAppContext } from "@/components/app-context";
-import IconButton from "@/components/icon-button.tsx";
-import { Spinner } from "@/components/ui/spinner.tsx";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
-import { EmailTextViewer } from "@/components/text-view.tsx";
+import IconButton from "@/components/icon-button";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmailTextViewer } from "@/components/text-view";
 import { HTMLPreview } from "@/components/html-preview";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -48,9 +71,9 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox.tsx";
+import { Checkbox } from "@/components/ui/checkbox";
 import { copyFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { join, tempDir } from "@tauri-apps/api/path";
 import { save } from "@tauri-apps/plugin-dialog";

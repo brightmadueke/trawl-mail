@@ -1,10 +1,12 @@
-import type { DeviceConfig } from "@/types/html-preview.ts";
+import type { DeviceConfig, ThemeMode } from "@/types/html-preview.ts";
+import { cn } from "@/lib/utils.ts";
 
 interface HomeIndicatorProps {
   deviceConfig: DeviceConfig;
+  theme: ThemeMode;
 }
 
-export function HomeIndicator({ deviceConfig }: HomeIndicatorProps) {
+export function HomeIndicator({ deviceConfig, theme }: HomeIndicatorProps) {
   const style = deviceConfig.homeIndicatorStyle || {};
 
   // Check if this is an iPhone (has dynamic island or notch)
@@ -18,19 +20,36 @@ export function HomeIndicator({ deviceConfig }: HomeIndicatorProps) {
 
   return (
     <div
-      className="absolute left-1/2 -translate-x-1/2 z-20"
+      className={cn(
+        "absolute left-1/2 -translate-x-1/2 z-20",
+        theme == "dark" ? "bg-neutral-300" : "bg-neutral-500",
+      )}
       style={{
         bottom: isIPhone ? "8px" : style.bottom || "8px",
         width: isIPhone ? "134px" : style.width || "134px",
         height: isIPhone ? "5px" : style.height || "5px",
         borderRadius: "100px",
-        background: "rgba(255, 255, 255, 0.15)",
+        //background: "rgba(255, 255, 255, 0.15)",
         backdropFilter: "blur(10px)",
         WebkitBackdropFilter: "blur(10px)",
-        boxShadow: isIPhone
-          ? "0 0 1px rgba(255, 255, 255, 0.1)"
-          : "0 0 4px rgba(0,0,0,0.2)",
+        boxShadow: getBoxShadow(isIPhone, theme),
       }}
     />
   );
+}
+
+function getBoxShadow(isIPhone: boolean, theme: ThemeMode) {
+  if (isIPhone) {
+    if (theme === "dark") {
+      return "0 0 1px rgba(255, 255, 255, 0.1)";
+    } else {
+      return "0 0 1px rgba(0, 0, 0, 0.1)";
+    }
+  } else {
+    if (theme === "dark") {
+      return "0 0 4px rgba(255, 255, 255, 0.2)";
+    } else {
+      return "0 0 4px rgba(0,0,0,0.2)";
+    }
+  }
 }

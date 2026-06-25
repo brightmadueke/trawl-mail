@@ -1,11 +1,36 @@
-import { cn } from "@/lib/utils.ts";
 import type { EmailClientConfig, ThemeMode } from "@/types/html-preview.ts";
-import { EmailContentIframe } from "./email-content-iframe.tsx";
+import IconButton from "@/components/icon-button.tsx";
+import {
+  ArchiveIcon,
+  ArrowLeftIcon,
+  ChevronDown,
+  ChevronUp,
+  EllipsisVertical,
+  FileText,
+  Flag,
+  Forward,
+  Inbox,
+  Lock,
+  Menu,
+  Plus,
+  Reply,
+  Search,
+  Send,
+  Tag,
+  Trash2Icon,
+} from "lucide-react";
+import { cn } from "@/lib/utils.ts";
+import { Button } from "@/components/ui/button.tsx";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { useState } from "react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible.tsx";
 import { Email } from "@/types/app.ts";
-
-// ============================================================================
-// TYPES
-// ============================================================================
+import { EmailContentIframe } from "@/components/html-preview/email-client-uis/email-content-iframe.tsx";
 
 interface EmailClientUIProps {
   clientConfig: EmailClientConfig;
@@ -13,403 +38,521 @@ interface EmailClientUIProps {
   emailHTML: string;
   iframeKey: number;
   selectedEmail: Email;
+  isMobile: boolean;
 }
 
-// ============================================================================
-// APPLE MAIL UI
-// ============================================================================
-
-export function AppleMailUI({
-  clientConfig,
-  theme,
+// ----------------------------------------------------------------------------
+// Shared Email Content
+// ----------------------------------------------------------------------------
+function EmailContent({
+  selectedEmail,
   emailHTML,
   iframeKey,
-  selectedEmail,
-}: EmailClientUIProps) {
-  const isDark = theme === "dark";
-  const bg = isDark ? "#1a1a1a" : "#ffffff";
-  const headerBg = isDark ? "#2C2C2E" : "#F5F5F7";
-  const textColor = isDark ? "#F5F5F7" : "#1D1D1F";
-  const mutedColor = isDark ? "#98989D" : "#86868B";
-  const borderColor = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
-  const sidebarBg = isDark ? "#1C1C1E" : "#F0F0F2";
+  clientConfig,
+}: {
+  selectedEmail: Email;
+  emailHTML: string;
+  iframeKey: number;
+  clientConfig: EmailClientConfig;
+  isDark: boolean;
+}) {
+  const [collapsibleOpen, setCollapsibleOpen] = useState(false);
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: bg }}>
-      {/* Sidebar */}
-      <div
-        className="w-[200px] flex-shrink-0 border-r flex flex-col"
-        style={{
-          backgroundColor: sidebarBg,
-          borderColor: borderColor,
-        }}
-      >
-        {/* Mailboxes */}
-        <div className="flex-1 overflow-y-auto p-3">
-          <div className="space-y-0.5">
-            <MailboxItem
-              icon={<InboxIcon />}
-              label="Inbox"
-              count="12"
-              active
-              isDark={isDark}
-            />
-            <MailboxItem icon={<StarIcon />} label="VIP" isDark={isDark} />
-            <MailboxItem icon={<ClockIcon />} label="Sent" isDark={isDark} />
-            <MailboxItem
-              icon={<DraftIcon />}
-              label="Drafts"
-              count="3"
-              isDark={isDark}
-            />
-            <MailboxItem icon={<TrashIcon />} label="Trash" isDark={isDark} />
-            <MailboxItem
-              icon={<ArchiveIcon />}
-              label="Archive"
-              isDark={isDark}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
-        <div
-          className="flex items-center gap-2 px-4 py-2 border-b"
-          style={{
-            backgroundColor: headerBg,
-            borderColor: borderColor,
-          }}
-        >
-          <ToolbarButton icon={<BackIcon />} label="Back" isDark={isDark} />
-          <ToolbarButton
-            icon={<ArchiveIcon />}
-            label="Archive"
-            isDark={isDark}
-          />
-          <ToolbarButton icon={<TrashIcon />} label="Delete" isDark={isDark} />
-          <ToolbarButton icon={<ReplyIcon />} label="Reply" isDark={isDark} />
-          <ToolbarButton
-            icon={<ForwardIcon />}
-            label="Forward"
-            isDark={isDark}
-          />
-          <div className="flex-1" />
-          <ToolbarButton icon={<FlagIcon />} label="Flag" isDark={isDark} />
-          <ToolbarButton icon={<MoreIcon />} label="More" isDark={isDark} />
-        </div>
-
-        {/* Email Content */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Subject */}
-          <div className="px-6 pt-5 pb-3">
-            <h1 className="text-xl font-semibold" style={{ color: textColor }}>
-              {selectedEmail.subject}
-            </h1>
-          </div>
-
-          {/* Sender Info */}
-          <div
-            className="px-6 pb-4 mb-4 border-b"
-            style={{ borderColor: borderColor }}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                {/* Avatar */}
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                  style={{ backgroundColor: clientConfig.avatarBg }}
-                >
-                  {selectedEmail.sender_name.charAt(0)}
-                </div>
-                <div>
-                  <div
-                    className="font-semibold text-sm"
-                    style={{ color: textColor }}
-                  >
-                    {selectedEmail.sender_name}
-                  </div>
-                  <div className="text-xs" style={{ color: mutedColor }}>
-                    {selectedEmail.from}
-                  </div>
-                  <div className="text-xs mt-1" style={{ color: mutedColor }}>
-                    To: {selectedEmail.to}
-                  </div>
-                </div>
+    <div className="flex flex-col gap-2">
+      <Collapsible open={collapsibleOpen} onOpenChange={setCollapsibleOpen}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar size="lg">
+              <AvatarFallback
+                className={cn(
+                  "text-white text-xl",
+                  `bg-[${clientConfig.avatarBg}]`,
+                )}
+              >
+                {selectedEmail.sender_name.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-md font-semibold">
+                  {selectedEmail.sender_name}
+                </span>
+                <span className="text-sm text-gray-500">
+                  {new Date(selectedEmail.date).toLocaleString("en-US", {
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </span>
               </div>
-              <div className="text-xs" style={{ color: mutedColor }}>
-                {selectedEmail.date}
+              <div className="flex items-center gap-1 text-sm text-gray-500">
+                <span>To: {selectedEmail.to}</span>
+                <CollapsibleTrigger asChild>
+                  <IconButton
+                    icon={collapsibleOpen ? <ChevronUp /> : <ChevronDown />}
+                    variant="ghost"
+                    size="icon-xs"
+                    className="rounded-full"
+                  />
+                </CollapsibleTrigger>
               </div>
             </div>
           </div>
-
-          {/* Email Body */}
-          <div className="px-6">
-            <EmailContentIframe emailHTML={emailHTML} iframeKey={iframeKey} />
+          <div className="flex items-center gap-1">
+            <IconButton
+              icon={<Reply />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<Forward />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<ArchiveIcon />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<Trash2Icon />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<Flag />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
+            <IconButton
+              icon={<EllipsisVertical />}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            />
           </div>
         </div>
+        <CollapsibleContent className="mt-2 p-3 rounded-lg bg-gray-100 dark:bg-gray-800">
+          <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
+            <span className="text-gray-500">From:</span>
+            <span>
+              {selectedEmail.sender_name}{" "}
+              <span className="text-gray-400">({selectedEmail.from})</span>
+            </span>
+            <span className="text-gray-500">To:</span>
+            <span className="text-gray-500">{selectedEmail.to}</span>
+            <span className="text-gray-500">Date:</span>
+            <span className="text-gray-500">
+              {new Date(selectedEmail.date).toLocaleString("en-US", {
+                month: "short",
+                day: "2-digit",
+                year: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+              })}
+            </span>
+            <span className="text-gray-500 flex items-center">
+              <Lock size={14} className="mr-1" />
+            </span>
+            <span className="text-gray-500">Encrypted</span>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+      <div className="mt-2">
+        <EmailContentIframe emailHTML={emailHTML} iframeKey={iframeKey} />
       </div>
     </div>
   );
 }
 
-// ============================================================================
-// MAILBOX ITEM
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Mobile version
+// ----------------------------------------------------------------------------
+function AppleMailMobile(props: EmailClientUIProps) {
+  const { clientConfig, theme, emailHTML, iframeKey, selectedEmail } = props;
+  const isDark = theme === "dark";
 
-function MailboxItem({
-  icon,
-  label,
-  count,
-  active = false,
-  isDark,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count?: string;
-  active?: boolean;
-  isDark: boolean;
-}) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
-        active && (isDark ? "bg-white/10" : "bg-black/5"),
+        "h-full w-full flex flex-col overflow-hidden",
+        isDark ? clientConfig.bgColorDark : clientConfig.bgColor,
       )}
-      style={{
-        color: active
-          ? isDark
-            ? "#ffffff"
-            : "#1D1D1F"
-          : isDark
-            ? "#98989D"
-            : "#86868B",
-      }}
     >
-      <span className="w-5 h-5 flex items-center justify-center">{icon}</span>
-      <span className="flex-1 font-medium">{label}</span>
-      {count && <span className="text-xs opacity-60">{count}</span>}
+      {/* Header */}
+      <header
+        className={cn(
+          "flex items-center gap-2 px-4 py-3 border-b",
+          isDark ? clientConfig.headerBgDark : clientConfig.headerBg,
+          isDark ? "border-[#3a3a3c]" : "border-[#e5e5ea]",
+        )}
+      >
+        <IconButton
+          icon={
+            <ArrowLeftIcon
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+        <span
+          className={cn(
+            "font-semibold text-lg flex-1 truncate",
+            isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+          )}
+        >
+          {selectedEmail.subject}
+        </span>
+        <IconButton
+          icon={
+            <Flag
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+        <IconButton
+          icon={
+            <ArchiveIcon
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+        <IconButton
+          icon={
+            <Trash2Icon
+              className={cn(
+                isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+              )}
+            />
+          }
+          variant="ghost"
+          className="rounded-full"
+        />
+      </header>
+
+      {/* Email content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <EmailContent
+          selectedEmail={selectedEmail}
+          emailHTML={emailHTML}
+          iframeKey={iframeKey}
+          clientConfig={clientConfig}
+          isDark={isDark}
+        />
+      </div>
+
+      {/* Reply/Forward bar */}
+      <div
+        className={cn(
+          "flex gap-2 p-4 border-t",
+          "bg-white dark:bg-[#2c2c2e]",
+          "border-[#e5e5ea] dark:border-[#3a3a3c]",
+        )}
+      >
+        <Button
+          className={cn(
+            "rounded-full h-12 flex-1 text-white",
+            `bg-[${clientConfig.accentColor}]`,
+          )}
+        >
+          <Reply className="mr-2 h-4 w-4" /> Reply
+        </Button>
+        <Button variant="outline" className="rounded-full h-12 flex-1">
+          <Forward className="mr-2 h-4 w-4" /> Forward
+        </Button>
+      </div>
     </div>
   );
 }
 
-// ============================================================================
-// TOOLBAR BUTTON
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Desktop version
+// ----------------------------------------------------------------------------
+function AppleMailDesktop(props: EmailClientUIProps) {
+  const { clientConfig, theme, emailHTML, iframeKey, selectedEmail } = props;
+  const isDark = theme === "dark";
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-function ToolbarButton({
-  icon,
-  label,
-  isDark,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  isDark: boolean;
-}) {
   return (
-    <button
-      className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-black/5"
-      style={{
-        color: isDark ? "#F5F5F7" : "#1D1D1F",
-      }}
-      title={label}
-      aria-label={label}
+    <div
+      className={cn(
+        "h-full w-full flex overflow-hidden",
+        isDark ? clientConfig.bgColorDark : clientConfig.bgColor,
+      )}
     >
-      <span className="w-4 h-4">{icon}</span>
-    </button>
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "w-60 shrink-0 flex flex-col border-r transition-all duration-200",
+          isDark ? clientConfig.headerBgDark : clientConfig.headerBg,
+          isDark ? "border-[#3a3a3c]" : "border-[#e5e5ea]",
+          !sidebarOpen && "w-0 overflow-hidden border-0",
+        )}
+      >
+        <div
+          className={cn(
+            "p-4 flex items-center gap-2 border-b",
+            isDark ? "border-[#3a3a3c]" : "border-[#e5e5ea]",
+          )}
+        >
+          <IconButton
+            icon={
+              <Menu
+                className={cn(
+                  isDark
+                    ? clientConfig.headerTextDark
+                    : clientConfig.headerText,
+                )}
+              />
+            }
+            variant="ghost"
+            className="rounded-full"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <span
+            className={cn(
+              "font-semibold text-lg",
+              isDark ? clientConfig.headerTextDark : clientConfig.headerText,
+            )}
+          >
+            Mail
+          </span>
+        </div>
+        <div className="px-4 py-3">
+          <Button
+            className={cn(
+              "w-full rounded-full text-white",
+              `bg-[${clientConfig.accentColor}]`,
+            )}
+          >
+            <Plus className="mr-2 h-4 w-4" /> New Message
+          </Button>
+        </div>
+        <nav className="flex-1 px-2 space-y-1">
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start rounded-md",
+              isDark ? `bg-[${clientConfig.accentColor}30]` : "bg-[#e6f2fc]",
+              `text-[${clientConfig.accentColor}]`,
+            )}
+          >
+            <Inbox className="mr-3 h-5 w-5" /> Inbox{" "}
+            <span
+              className={cn(
+                "ml-auto text-xs text-white rounded-full px-2",
+                `bg-[${clientConfig.accentColor}]`,
+              )}
+            >
+              23
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300"
+          >
+            <Send className="mr-3 h-5 w-5" /> Sent
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300"
+          >
+            <FileText className="mr-3 h-5 w-5" /> Drafts
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300"
+          >
+            <Trash2Icon className="mr-3 h-5 w-5" /> Trash
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start rounded-md text-gray-700 dark:text-gray-300"
+          >
+            <Tag className="mr-3 h-5 w-5" /> Flagged
+          </Button>
+        </nav>
+      </aside>
+
+      {/* Main area */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <header
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 border-b",
+            isDark ? clientConfig.headerBgDark : clientConfig.headerBg,
+            isDark ? "border-[#3a3a3c]" : "border-[#e5e5ea]",
+          )}
+        >
+          {!sidebarOpen && (
+            <IconButton
+              icon={
+                <Menu
+                  className={cn(
+                    isDark
+                      ? clientConfig.headerTextDark
+                      : clientConfig.headerText,
+                  )}
+                />
+              }
+              variant="ghost"
+              className="rounded-full"
+              onClick={() => setSidebarOpen(true)}
+            />
+          )}
+          <IconButton
+            icon={
+              <ArrowLeftIcon
+                className={cn(
+                  isDark
+                    ? clientConfig.headerTextDark
+                    : clientConfig.headerText,
+                )}
+              />
+            }
+            variant="ghost"
+            className="rounded-full"
+          />
+          <div className="flex-1 flex items-center gap-2">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search"
+                className={cn(
+                  "pl-9 rounded-full bg-gray-100 dark:bg-gray-800 border-0",
+                  "focus-visible:ring-1",
+                  `focus-visible:ring-[${clientConfig.accentColor}]`,
+                )}
+              />
+            </div>
+          </div>
+          <IconButton
+            icon={
+              <ArchiveIcon
+                className={cn(
+                  isDark
+                    ? clientConfig.headerTextDark
+                    : clientConfig.headerText,
+                )}
+              />
+            }
+            variant="ghost"
+            className="rounded-full"
+          />
+          <IconButton
+            icon={
+              <Trash2Icon
+                className={cn(
+                  isDark
+                    ? clientConfig.headerTextDark
+                    : clientConfig.headerText,
+                )}
+              />
+            }
+            variant="ghost"
+            className="rounded-full"
+          />
+          <IconButton
+            icon={
+              <Reply
+                className={cn(
+                  isDark
+                    ? clientConfig.headerTextDark
+                    : clientConfig.headerText,
+                )}
+              />
+            }
+            variant="ghost"
+            className="rounded-full"
+          />
+          <IconButton
+            icon={
+              <EllipsisVertical
+                className={cn(
+                  isDark
+                    ? clientConfig.headerTextDark
+                    : clientConfig.headerText,
+                )}
+              />
+            }
+            variant="ghost"
+            className="rounded-full"
+          />
+        </header>
+
+        {/* Email view */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div
+            className={cn(
+              "max-w-4xl mx-auto rounded-xl shadow-sm border",
+              isDark
+                ? "bg-[#2c2c2e] border-[#3a3a3c]"
+                : "bg-white border-[#e5e5ea]",
+            )}
+          >
+            <div className="px-6 pt-6 pb-2">
+              <h2 className="text-2xl font-semibold">
+                {selectedEmail.subject}
+              </h2>
+              <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                <span className="text-gray-700 dark:text-gray-300">
+                  {selectedEmail.sender_name}
+                </span>
+                <span>&lt;{selectedEmail.from}&gt;</span>
+                <span>•</span>
+                <span>{new Date(selectedEmail.date).toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="px-6 py-4">
+              <EmailContent
+                selectedEmail={selectedEmail}
+                emailHTML={emailHTML}
+                iframeKey={iframeKey}
+                clientConfig={clientConfig}
+                isDark={isDark}
+              />
+            </div>
+            <div className="flex gap-2 px-6 pb-6">
+              <Button
+                className={cn(
+                  "rounded-full px-6 text-white",
+                  `bg-[${clientConfig.accentColor}]`,
+                )}
+              >
+                <Reply className="mr-2 h-4 w-4" /> Reply
+              </Button>
+              <Button variant="outline" className="rounded-full px-6">
+                <Forward className="mr-2 h-4 w-4" /> Forward
+              </Button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
 
-// ============================================================================
-// ICONS
-// ============================================================================
-
-function InboxIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M22 12h-6l-2 3H10l-2-3H2" />
-      <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
-    </svg>
-  );
-}
-
-function StarIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function DraftIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-    </svg>
-  );
-}
-
-function ArchiveIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <polyline points="21 8 21 21 3 21 3 8" />
-      <rect x="1" y="3" width="22" height="5" />
-      <line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  );
-}
-
-function BackIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function ReplyIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="7 10 12 5 17 10" />
-      <line x1="12" y1="5" x2="12" y2="19" />
-    </svg>
-  );
-}
-
-function ForwardIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M3 15v4a2 2 0 002 2h14a2 2 0 002-2v-4" />
-      <polyline points="17 10 12 5 7 10" />
-      <line x1="12" y1="5" x2="12" y2="19" />
-    </svg>
-  );
-}
-
-function FlagIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-      <line x1="4" y1="22" x2="4" y2="15" />
-    </svg>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="w-4 h-4"
-    >
-      <circle cx="12" cy="5" r="1" />
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="12" cy="19" r="1" />
-    </svg>
+export function AppleMailUI(props: EmailClientUIProps) {
+  return props.isMobile ? (
+    <AppleMailMobile {...props} />
+  ) : (
+    <AppleMailDesktop {...props} />
   );
 }

@@ -1,15 +1,23 @@
-// src/components/app-sidebar.tsx
+// src/components/app-sidebar
 
-import { EnhancedSidebar, SidebarConfigType } from "@/components/enhanced-sidebar";
-import { useAutoCollapseSidebar, useTauriWindowSize } from "@/hooks/use-window-width";
+import {
+  EnhancedSidebar,
+  SidebarConfigType,
+} from "@/components/enhanced-sidebar";
+import {
+  useAutoCollapseSidebar,
+  useTauriWindowSize,
+} from "@/hooks/use-window-width";
 import { Inbox, Settings, TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { ThemeToggle } from "@/components/theme-toggle.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
+import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAppContext } from "@/components/app-context";
 import { useLocation } from "react-router";
-
-1;
 
 export function AppSidebar() {
   const { width } = useTauriWindowSize();

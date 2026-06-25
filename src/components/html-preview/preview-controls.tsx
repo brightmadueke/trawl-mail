@@ -1,6 +1,12 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button.tsx";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
 import { Slider } from "@/components/ui/slider.tsx";
@@ -10,14 +16,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.tsx";
 import { cn } from "@/lib/utils.ts";
 import {
   Check,
   ChevronDown,
-  Copy,
-  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -30,11 +34,16 @@ import {
   Sun,
   Tablet,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
 } from "lucide-react";
 import { DEVICES } from "@/components/html-preview/data/devices.ts";
 import { EMAIL_CLIENTS } from "@/components/html-preview/data/email-clients.tsx";
-import type { DeviceConfig, DeviceType, EmailClient, ThemeMode } from "@/types/html-preview.ts";
+import type {
+  DeviceConfig,
+  DeviceType,
+  EmailClient,
+  ThemeMode,
+} from "@/types/html-preview.ts";
 import IconButton from "@/components/icon-button.tsx"; // ============================================================================
 
 // ============================================================================
@@ -89,8 +98,6 @@ export function PreviewControls({
   onZoomOut,
   onFrameToggle,
   onOrientationToggle,
-  onCopy,
-  onDownload,
   onOpenInBrowser,
   onFullscreenToggle,
 }: PreviewControlsProps) {
@@ -238,18 +245,7 @@ export function PreviewControls({
       />
 
       {/* Action Buttons */}
-      <ControlButton
-        icon={<Copy className="h-4 w-4" />}
-        tooltip="Copy HTML"
-        isFullscreen={isFullscreen}
-        onClick={onCopy}
-      />
-      <ControlButton
-        icon={<Download className="h-4 w-4" />}
-        tooltip="Download HTML"
-        isFullscreen={isFullscreen}
-        onClick={onDownload}
-      />
+
       <ControlButton
         icon={<ExternalLink className="h-4 w-4" />}
         tooltip="Open in Browser"

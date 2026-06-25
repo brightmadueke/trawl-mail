@@ -1,4 +1,4 @@
-// IconButton.tsx
+// IconButton
 import React from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
