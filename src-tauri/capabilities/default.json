@@ -17,6 +17,8 @@
     "notification:allow-request-permission",
     "notification:allow-notify",
     "notification:allow-permission-state",
+    "notification:allow-check-permissions",
+    "notification:allow-show",
     "store:default",
     "store:allow-get",
     "store:allow-set",

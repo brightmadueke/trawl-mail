@@ -1,22 +1,9 @@
 // src/components/app-context
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from "@tauri-apps/plugin-notification";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { Command } from "@tauri-apps/plugin-shell";
-import { type } from "@tauri-apps/plugin-os";
 import { toast } from "sonner";
 import { load, Store } from "@tauri-apps/plugin-store";
 import { Email, LogEntry, ServerConfig, ServerStatus } from "@/types/app";
@@ -473,19 +460,10 @@ export function AppProvider({ children }: AppProviderProps) {
       }
 
       if (hasPermission) {
-        const currentOs = type();
-
-        if (currentOs === "linux") {
-          await Command.create("notify-send", [
-            `${email.subject || "New Email"}`,
-            `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
-          ]).execute();
-        } else {
-          sendNotification({
-            title: `${email.subject || "New Email"}`,
-            body: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
-          });
-        }
+        sendNotification({
+          title: `${email.subject || "New Email"}`,
+          body: `From: ${email.sender_name || email.from || "Unknown"}\n${body}`,
+        });
       }
     },
     [
@@ -758,9 +736,11 @@ export function AppProvider({ children }: AppProviderProps) {
   const deleteEmail = useCallback(
     async (emailId: string) => {
       try {
+        const deletedEmail = emails.find((e) => e.id === emailId);
+        setEmails((prev) => prev.filter((e) => e.id !== emailId));
         if (isDevMode() && !serverStatus.is_running) {
-          const deletedEmail = emails.find((e) => e.id === emailId);
-          setEmails((prev) => prev.filter((e) => e.id !== emailId));
+          // const deletedEmail = emails.find((e) => e.id === emailId);
+          // setEmails((prev) => prev.filter((e) => e.id !== emailId));
           if (deletedEmail && !deletedEmail.is_read) {
             setUnreadCount((prev) => Math.max(0, prev - 1));
           }
@@ -771,7 +751,7 @@ export function AppProvider({ children }: AppProviderProps) {
 
         await invoke<boolean>("delete_email", { emailId });
 
-        const deletedEmail = emails.find((e) => e.id === emailId);
+        //const deletedEmail = emails.find((e) => e.id === emailId);
         setEmails((prev) => prev.filter((e) => e.id !== emailId));
 
         if (deletedEmail && !deletedEmail.is_read) {
